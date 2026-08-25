@@ -1,0 +1,4 @@
+samples:
+- confidence: 0.9
+  id: one
+  label: cat

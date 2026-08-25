@@ -1,0 +1,43 @@
+{
+  "accuracy": 0.0,
+  "cache": {
+    "hits": 0,
+    "misses": 1
+  },
+  "partial": {
+    "evaluated_count": 1,
+    "failing_sample": {
+      "attention_score": 0.25,
+      "cache_hit": false,
+      "risk_bucket": "random_coverage",
+      "sample_id": "three",
+      "selection_reason": "random_coverage"
+    },
+    "remaining_count": 2
+  },
+  "records": [
+    {
+      "attention_score": 0.25,
+      "cache_hit": false,
+      "confidence": 0.9,
+      "correct": false,
+      "expected_label": "cat",
+      "predicted_label": "dog",
+      "risk_bucket": "random_coverage",
+      "sample_id": "three",
+      "selection_reason": "random_coverage"
+    }
+  ],
+  "regression": {
+    "accuracy_drop": 1.0,
+    "baseline_accuracy": 1.0,
+    "candidate_accuracy": 0.0,
+    "fixed_failures": [],
+    "is_regression": true,
+    "new_failures": [
+      "three"
+    ]
+  },
+  "sample_count": 1,
+  "suite_name": "fail-fast"
+}

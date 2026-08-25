@@ -1,0 +1,24 @@
+{
+  "accuracy": 0.0,
+  "cache": {
+    "hits": 0,
+    "misses": 0
+  },
+  "partial": null,
+  "records": [
+    {
+      "attention_score": 0.0,
+      "cache_hit": false,
+      "confidence": 0.8,
+      "correct": false,
+      "expected_label": "cat",
+      "predicted_label": "dog",
+      "risk_bucket": "unspecified",
+      "sample_id": "sample-1",
+      "selection_reason": "high_risk"
+    }
+  ],
+  "regression": null,
+  "sample_count": 1,
+  "suite_name": "suite"
+}

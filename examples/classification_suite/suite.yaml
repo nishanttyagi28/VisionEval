@@ -1,0 +1,25 @@
+name: example-classification-regression-suite
+task: image_classification
+model:
+  adapter: your_project.classification_adapter:predict
+dataset:
+  manifest: data/evaluation_manifest.yaml
+attention:
+  budget: 100
+  seed: 42
+  previous_failures: true
+  high_risk_tags: [safety_critical]
+  low_confidence: true
+  low_confidence_threshold: 0.5
+  previous_failures_fraction: 0.40
+  high_risk_fraction: 0.30
+  low_confidence_fraction: 0.15
+  random_coverage_fraction: 0.15
+baseline:
+  path: artifacts/baselines/production.json
+  allowed_accuracy_drop: 0.01
+cache:
+  path: artifacts/cache.sqlite3
+report:
+  path: reports/classification.json
+  markdown_path: reports/classification.md

@@ -1,0 +1,10 @@
+{
+  "accuracy": 1.0,
+  "outcomes": {
+    "one": true,
+    "three": true,
+    "two": true
+  },
+  "sample_count": 3,
+  "suite_name": "fail-fast"
+}
