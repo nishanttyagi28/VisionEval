@@ -1,0 +1,21 @@
+name: phase1-demo
+task: image_classification
+model:
+  adapter: demo_adapter:predict
+dataset:
+  manifest: demo_manifest.yaml
+attention:
+  budget: 3
+  seed: 42
+  high_risk_tags: [safety_critical]
+  low_confidence_threshold: 0.5
+baseline:
+  path: artifacts/baselines/demo.json
+  allowed_accuracy_drop: 0.0
+cache:
+  path: artifacts/cache.sqlite3
+report:
+  path: reports/demo.json
+  markdown_path: reports/demo.md
+execution:
+  fail_fast: true

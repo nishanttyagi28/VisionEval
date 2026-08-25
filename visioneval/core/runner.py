@@ -1,6 +1,5 @@
 """Explicit end-to-end orchestration for Phase 1 classification suites."""
 
-import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -9,8 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from visioneval.classification.adapter import ClassificationAdapter, load_adapter
 from visioneval.classification.scorer import EvaluationSummary, evaluate
-from visioneval.core.baseline import Baseline, RegressionResult, compare_baseline, load_baseline, save_baseline
-from visioneval.core.cache import SQLiteCache
+from visioneval.core.baseline import Baseline, RegressionResult, compare_baseline, load_baseline, save_baseline, suite_hash
+from visioneval.core.cache import SQLiteCache, cache_identities
 from visioneval.core.report import partial_execution, write_reports
 from visioneval.core.sampler import select_samples
 from visioneval.core.suite import SuiteConfig, load_suite
@@ -44,38 +43,39 @@ def run_suite(suite_path: Path, update_baseline: bool = False, adapter: Classifi
     suite = load_suite(suite_path)
     cache = SQLiteCache(Path(suite.cache.path))
     selected = select_samples(_load_samples(Path(suite.dataset.manifest), cache.previous_failure_ids()), suite.attention)
-    model_hash = hashlib.sha256(suite.model.adapter.encode("utf-8")).hexdigest()
+    identity = (suite_hash(suite_path), suite.model.adapter, suite.attention.seed, suite.attention.budget)
     active_adapter = adapter or load_adapter(suite.model.adapter)
+    model_hash, preprocess_hash = cache_identities(suite.model.adapter, active_adapter)
     baseline = None if update_baseline else load_baseline(Path(suite.baseline.path))
     partial = None
 
     if suite.execution.fail_fast and baseline is not None:
-        summary, regression, partial = _evaluate_fail_fast(selected, active_adapter, cache, model_hash, baseline, suite.baseline.allowed_accuracy_drop)
+        summary, regression, partial = _evaluate_fail_fast(selected, active_adapter, cache, model_hash, preprocess_hash, baseline, suite.baseline.allowed_accuracy_drop, identity)
     else:
-        summary = evaluate(selected, active_adapter, cache, model_hash, "phase1")
-        regression = None if baseline is None else compare_baseline(baseline, summary.accuracy, suite.baseline.allowed_accuracy_drop, summary.records)
+        summary = evaluate(selected, active_adapter, cache, model_hash, preprocess_hash)
+        regression = None if baseline is None else compare_baseline(baseline, summary.accuracy, suite.baseline.allowed_accuracy_drop, summary.records, identity)
 
     cache.record(summary.records)
     if update_baseline:
-        save_baseline(Path(suite.baseline.path), Baseline(suite.name, summary.accuracy, len(summary.records), {record.sample_id: record.correct for record in summary.records}))
+        save_baseline(Path(suite.baseline.path), Baseline(suite.name, summary.accuracy, len(summary.records), {record.sample_id: record.correct for record in summary.records}, identity[0], identity[1], identity[2], identity[3], tuple(sorted(record.sample_id for record in summary.records))))
     write_reports(Path(suite.report.path), Path(suite.report.markdown_path) if suite.report.markdown_path else None, suite.name, summary, regression, partial)
     return RunResult(suite, summary, regression, partial)
 
 
-def _evaluate_fail_fast(selected, adapter: ClassificationAdapter, cache: SQLiteCache, model_hash: str, baseline: Baseline, allowed_accuracy_drop: float) -> tuple[EvaluationSummary, RegressionResult, dict[str, object] | None]:
+def _evaluate_fail_fast(selected, adapter: ClassificationAdapter, cache: SQLiteCache, model_hash: str, preprocess_hash: str, baseline: Baseline, allowed_accuracy_drop: float, identity: tuple[str, str, int, int]) -> tuple[EvaluationSummary, RegressionResult, dict[str, object] | None]:
     records: list[EvaluationRecord] = []
     hits = misses = 0
     for index, item in enumerate(selected):
-        one = evaluate((item,), adapter, cache, model_hash, "phase1")
+        one = evaluate((item,), adapter, cache, model_hash, preprocess_hash)
         records.extend(one.records)
         hits += one.cache_hits
         misses += one.cache_misses
         summary = _summary(records, hits, misses)
-        regression = compare_baseline(baseline, summary.accuracy, allowed_accuracy_drop, summary.records)
+        regression = compare_baseline(baseline, summary.accuracy, allowed_accuracy_drop, summary.records, identity)
         if one.records[0].sample_id in regression.new_failures:
             return summary, regression, partial_execution(one.records[0], len(records), len(selected) - index - 1)
     summary = _summary(records, hits, misses)
-    return summary, compare_baseline(baseline, summary.accuracy, allowed_accuracy_drop, summary.records), None
+    return summary, compare_baseline(baseline, summary.accuracy, allowed_accuracy_drop, summary.records, identity), None
 
 
 def _summary(records: list[EvaluationRecord], hits: int, misses: int) -> EvaluationSummary:

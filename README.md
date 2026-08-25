@@ -1,169 +1,119 @@
 # VisionEval
 
-VisionEval is a CI-first evaluation harness for image-classification models. It selects a deterministic, risk-focused subset of samples, compares the result with a committed baseline, and emits evidence that can fail a deployment check.
+**CI-first evaluation harness for image-classification models.** It spends a fixed budget on the samples most likely to regress, compares the result to a git-trackable baseline, and fails the job with evidence—not a single accuracy number.
 
-## Problem Statement
+Phase 1 supports **image classification** only. It is not a training framework, serving stack, data platform, or dashboard.
 
-Aggregate benchmark metrics can hide regressions on high-risk or previously failing samples. Running every image on every commit is often too slow for practical CI. VisionEval focuses evaluation budget where a regression is most likely while retaining seeded random coverage.
+## The problem
 
-## Why VisionEval Exists
+Aggregate accuracy can hide a drop on safety-critical or previously failing images. Scoring every sample on every commit is often too slow for CI. VisionEval evaluates a **deterministic, risk-focused subset** and treats a new failure or an accuracy drop on the **same locked population** as a release blocker.
 
-VisionEval is built for regression detection before deployment. It is not a training framework, serving system, data platform, or dashboard. Its job is to make a release decision reproducible, explainable, and suitable for local development or CI.
+## Architecture
 
-## Harness Engineering Philosophy
-
-The harness prioritizes deterministic inputs, explicit baselines, local persistence, small reports, and non-zero CLI exits for regressions. Configuration is validated from YAML; output is JSON for automation and Markdown for review.
-
-## Attention-Based Evaluation
-
-The attention harness selects samples in this priority order:
-
-1. Previous failures from local SQLite history
-2. Samples with configured high-risk tags
-3. Samples below the confidence threshold
-4. Seeded random coverage
-
-The default evaluation budget is allocated 40% / 30% / 15% / 15%. Unused quota from an earlier attention bucket is given to the next attention bucket before random coverage. Every selected sample records its selection reason, attention score, and risk bucket.
-
-## Key Features
-
-- Deterministic, seedable attention sampling
-- Historical failure prioritization
-- SQLite WAL failure memory and prediction cache
-- Content-addressable prediction cache keys
-- Baseline persistence and aggregate accuracy comparison
-- New-failure and fixed-failure detection
-- JSON and Markdown reports
-- Sequential fail-fast on definite new failures
-- Partial reports with cache and attention evidence
-
-## Architecture Overview
-
-```text
-YAML suite + manifest
-        │
-        ▼
-attention sampler ──► selected samples with provenance
-        │
-        ▼
-classification adapter ──► SQLite prediction cache
-        │
-        ▼
-scoring ──► baseline comparison ──► JSON / Markdown report / CI exit code
+```mermaid
+flowchart LR
+  A[Suite YAML + manifest] --> B[Attention sampler]
+  B --> C[Model adapter]
+  C --> D[SQLite WAL cache]
+  D --> E[Scorer]
+  E --> F[Baseline lockfile]
+  F --> G[Markdown + JSON]
+  F --> H[CLI exit 0 / 1]
 ```
-
-## Repository Structure
 
 ```text
 visioneval/
-  cli.py                 CLI entry point
-  core/                  suite loading, sampling, runner, cache, baseline, reports
-  classification/        adapter loading, scoring, optional Torchvision/ONNX adapters
-examples/classification_suite/
-  suite.yaml             Phase 1 suite configuration example
-tests/                   unit and integration tests
-.github/workflows/       GitHub Actions test workflow
+  cli.py              visioneval run
+  core/               suite, sampler, runner, cache, baseline, reports
+  classification/     adapter loading, scoring, optional Torchvision / ONNX backends
+examples/             suite YAML template
+tests/                pytest
 ```
 
-## Installation
+## Attention-guided evaluation
 
-Python 3.10+ is required. Create the virtual environment inside the repository.
+Selection is seed-stable and ordered by priority. A sample is chosen once, at its highest matching bucket:
+
+1. Previous failures (SQLite history)
+2. Configured high-risk tags
+3. Catalog confidence at or below the threshold
+4. Seeded random coverage
+
+Default budget split: **40% / 30% / 15% / 15%**. Unused quota from an earlier attention bucket is given to the next attention bucket before random coverage. Every record stores `selection_reason`, `attention_score`, and `risk_bucket`.
+
+## Failure memory
+
+The local SQLite store keeps more than the last pass/fail bit: **`fail_count`** and **`consecutive_passes`**. A sample stays in the previous-failure bucket until it **passes twice in a row**, so one recovered run does not drop intermittent failures. The same database caches predictions; keys include model identity, preprocess identity, and image bytes when `image_path` is set.
+
+## Regression detection
+
+`--update-baseline` writes a sorted JSON lockfile: accuracy, per-sample outcomes, suite hash, model id, attention seed, budget, and selected sample ids. Later runs:
+
+- Compare accuracy and new/fixed failures only on **ids present in both** the baseline and the current selection.
+- Treat a **disjoint** selection (no shared ids) as a regression.
+- Fail if suite hash, model id, seed, or budget **do not match** the lockfile.
+- Exit **1** when `is_regression` is true.
+
+With `execution.fail_fast: true`, evaluation is sequential and stops on the first **new** failure, then writes a partial report. Do not pass `--update-baseline` in CI.
+
+## Quick start
+
+Python 3.10+. From the repository root:
 
 ```powershell
-Set-Location E:\VisionEval
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
+$env:PYTHONPATH = (Get-Location).Path
 ```
 
-Torchvision and ONNX Runtime adapters are lazy imports; install their runtime dependencies only when using them.
-
-## Quick Start
-
-1. Provide a YAML dataset manifest with labelled samples and an adapter callable using `module:callable` notation.
-2. Configure paths for a baseline, local SQLite cache, and reports.
-3. Create the initial baseline after reviewing the model output.
-4. Run the same suite in CI to detect regressions.
+Add a `module:callable` adapter that maps `ClassificationSample` → `ClassificationPrediction`, a YAML manifest (`id`, `label`, `confidence`, optional `tags` / `image_path`), and a suite YAML. Then:
 
 ```powershell
-visioneval run path\to\suite.yaml --update-baseline
-visioneval run path\to\suite.yaml
+visioneval run demo_suite.yaml --update-baseline
+visioneval run demo_suite.yaml
 ```
 
-The second command exits non-zero when the candidate is a regression.
+The second command exits `0` on **PASS**. Change the adapter to return a wrong label and rerun: exit `1`, status **REGRESSION**.
 
-## Example `suite.yaml`
+Full file contents: [QUICKSTART.md](QUICKSTART.md). Walkthrough with fail-fast: [DEMO_GUIDE.md](DEMO_GUIDE.md).
 
-```yaml
-name: classification-regression-suite
-task: image_classification
-model:
-  adapter: your_project.classification_adapter:predict
-dataset:
-  manifest: data/evaluation_manifest.yaml
-attention:
-  budget: 100
-  seed: 42
-  high_risk_tags: [safety_critical]
-  low_confidence_threshold: 0.5
-baseline:
-  path: artifacts/baselines/production.json
-  allowed_accuracy_drop: 0.01
-cache:
-  path: artifacts/cache.sqlite3
-report:
-  path: reports/classification.json
-  markdown_path: reports/classification.md
-execution:
-  fail_fast: true
+The installed `visioneval` script does not put the current directory on `PYTHONPATH`; set it as above so a local adapter imports. Optional Torchvision and ONNX adapters in `visioneval.classification.backends` load lazily—install those runtimes only if you use them.
+
+## Sample Markdown report
+
+Produced by a fail-fast candidate run after the adapter started returning `dog` instead of `cat`:
+
+```markdown
+# VisionEval: phase1-demo
+
+- Status: **REGRESSION**
+- Accuracy: `0.0000`
+- Evaluated samples: `1`
+- Prediction cache: `0` hits / `1` misses
+- Attention buckets: `high_risk` `1`
+- Execution: **FAIL-FAST**
+- Remaining samples: `2`
+- Failing sample: `one` (high_risk, score `0.75`)
+- Accuracy drop: `1.0000`
+- New failures: `1` (`one`)
+- Fixed failures: `0` (none)
 ```
 
-The manifest accepts `id`, `label`, `confidence`, optional `tags`, and optional `image_path` per sample. The adapter accepts a `ClassificationSample` and returns a `ClassificationPrediction`.
-
-## Example CLI Usage
-
-```powershell
-visioneval run examples\classification_suite\suite.yaml --update-baseline
-visioneval run examples\classification_suite\suite.yaml
-python -m pytest
-```
-
-The bundled example references a user-provided adapter and manifest path; update those entries before running it.
-
-## Attention Sampling Explanation
-
-Selection starts from a stable sample-ID order and uses the suite seed for all draws. A sample is selected once, at its highest-priority applicable bucket. Unused quota cascades down the attention order and only then fills random coverage. This prevents duplicate computation and makes report provenance stable across identical runs.
-
-## Regression Detection Workflow
-
-A baseline stores aggregate accuracy and per-sample pass/fail outcomes. When outcomes are present, accuracy drop and new/fixed failures are computed only on sample ids that appear in both the baseline and the current run, so attention-driven selection changes do not compare different populations. A run that shares no ids with the locked baseline is a regression. A candidate is a regression when that overlap drop exceeds the configured accuracy-drop tolerance or introduces a new failure on a locked sample. Fixed failures are recorded separately for review. Baselines without per-sample outcomes still use aggregate accuracy.
-
-With `execution.fail_fast: true`, VisionEval processes the deterministic selection sequence one sample at a time. It stops only on a definite new failure, writes a partial report, and returns a regression result. Aggregate accuracy is evaluated after a complete run because an interim value can recover.
-
-## Cache Architecture
-
-The local SQLite database uses WAL mode. It stores the latest sample outcome for attention prioritization and cached predictions for unchanged inputs. Prediction keys combine model identity, preprocessing identity, and a streaming SHA-256 hash of image content. Reports include cache hit and miss totals.
-
-## Baseline Architecture
-
-Baselines are small, sorted JSON files intended for review and source control. Promote a baseline deliberately with `--update-baseline`; do not update it automatically in CI.
-
-## CI/CD Integration
-
-Run the suite after a model or preprocessing change. Publish the JSON and Markdown reports as CI artifacts in the calling workflow, and treat a non-zero `visioneval run` exit as a quality-gate failure. The repository includes a GitHub Actions workflow that runs the test suite.
-
-## Current Status
-
-Phase 1 supports image classification evaluation with deterministic attention selection, local cache-backed execution, baseline regression comparison, and sequential fail-fast reporting. Detection, OCR, segmentation, distributed execution, dashboards, and cloud services are intentionally out of scope.
+JSON (`records`, cache totals, `regression.new_failures`) is for automation. Publish both as CI artifacts and gate on the CLI exit code. This repo’s GitHub Actions workflow runs **pytest**.
 
 ## Roadmap
 
-The next highest-impact milestone is deterministic process-pool execution for complete, non-fail-fast runs. Fail-fast remains sequential to preserve termination order and unambiguous partial evidence.
+**Now (Phase 1):** image classification, attention sampling, SQLite memory and prediction cache, git-native baseline lockfile, overlap-based regression, sequential fail-fast, Markdown/JSON reports.
+
+**Next:** deterministic process-pool execution for **complete, non-fail-fast** runs. Fail-fast stays sequential so stop order and partial evidence stay unambiguous.
+
+**Out of scope:** detection, OCR, segmentation, distributed runners, dashboards, cloud services.
 
 ## Contributing
 
-Keep changes narrow, deterministic, and covered by tests. Prefer plain functions and dataclasses over new abstractions. Do not add future-modality infrastructure until a concrete Phase 1 need exists.
+Keep changes small, deterministic, and tested (`python -m pytest`). Prefer plain functions and dataclasses. Do not add other modalities until Phase 1 needs them.
 
 ## License
 
-License placeholder: Apache-2.0. Add the full license text before distributing release artifacts.
+Apache-2.0.

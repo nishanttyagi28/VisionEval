@@ -1,0 +1,4 @@
+samples:
+  - {id: one, label: cat, confidence: 0.9, tags: [safety_critical]}
+  - {id: two, label: cat, confidence: 0.4}
+  - {id: three, label: cat, confidence: 0.9}

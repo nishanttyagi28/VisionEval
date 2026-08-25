@@ -1,5 +1,6 @@
 """Git-trackable baseline persistence and per-sample regression comparison."""
 
+import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -13,6 +14,11 @@ class Baseline:
     accuracy: float
     sample_count: int
     outcomes: dict[str, bool] = field(default_factory=dict)
+    suite_hash: str = ""
+    model_id: str = ""
+    attention_seed: int | None = None
+    budget: int | None = None
+    selected_sample_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -25,9 +31,17 @@ class RegressionResult:
     fixed_failures: tuple[str, ...] = ()
 
 
+def suite_hash(path: Path) -> str:
+    """SHA-256 of the suite YAML bytes used as a lockfile identity."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def load_baseline(path: Path) -> Baseline:
     with path.open("r", encoding="utf-8") as baseline_file:
-        return Baseline(**json.load(baseline_file))
+        payload = json.load(baseline_file)
+    if "selected_sample_ids" in payload:
+        payload["selected_sample_ids"] = tuple(payload["selected_sample_ids"])
+    return Baseline(**payload)
 
 
 def save_baseline(path: Path, baseline: Baseline) -> None:
@@ -35,7 +49,7 @@ def save_baseline(path: Path, baseline: Baseline) -> None:
     path.write_text(json.dumps(asdict(baseline), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def compare_baseline(baseline: Baseline, candidate_accuracy: float, allowed_accuracy_drop: float, records: tuple[EvaluationRecord, ...] = ()) -> RegressionResult:
+def compare_baseline(baseline: Baseline, candidate_accuracy: float, allowed_accuracy_drop: float, records: tuple[EvaluationRecord, ...] = (), identity: tuple[str, str, int, int] | None = None) -> RegressionResult:
     """Compare a candidate against a baseline on the same sample population.
 
     When the baseline stores per-sample outcomes, accuracy and new/fixed failures
@@ -43,13 +57,15 @@ def compare_baseline(baseline: Baseline, candidate_accuracy: float, allowed_accu
     selected by attention but missing from the baseline do not vote. An empty
     overlap is a regression because the locked population was not re-evaluated.
     Baselines without outcomes keep aggregate comparison.
+    Locked baselines also fail when suite hash, model id, attention seed, or budget differ.
     """
+    identity_mismatch = bool(baseline.suite_hash and identity and (baseline.suite_hash, baseline.model_id, baseline.attention_seed, baseline.budget) != identity)
     current = {record.sample_id: record.correct for record in records}
     if not baseline.outcomes:
         accuracy_drop = round(baseline.accuracy - candidate_accuracy, 12)
         new_failures = tuple(sorted(sample_id for sample_id, correct in current.items() if not correct and baseline.outcomes.get(sample_id, True)))
         fixed_failures = tuple(sorted(sample_id for sample_id, correct in current.items() if correct and baseline.outcomes.get(sample_id) is False))
-        return RegressionResult(baseline.accuracy, candidate_accuracy, accuracy_drop, accuracy_drop > allowed_accuracy_drop or bool(new_failures), new_failures, fixed_failures)
+        return RegressionResult(baseline.accuracy, candidate_accuracy, accuracy_drop, identity_mismatch or accuracy_drop > allowed_accuracy_drop or bool(new_failures), new_failures, fixed_failures)
 
     overlap = [sample_id for sample_id in current if sample_id in baseline.outcomes]
     if not overlap:
@@ -60,4 +76,4 @@ def compare_baseline(baseline: Baseline, candidate_accuracy: float, allowed_accu
     accuracy_drop = round(locked_accuracy - observed_accuracy, 12)
     new_failures = tuple(sorted(sample_id for sample_id in overlap if not current[sample_id] and baseline.outcomes[sample_id]))
     fixed_failures = tuple(sorted(sample_id for sample_id in overlap if current[sample_id] and not baseline.outcomes[sample_id]))
-    return RegressionResult(locked_accuracy, observed_accuracy, accuracy_drop, accuracy_drop > allowed_accuracy_drop or bool(new_failures), new_failures, fixed_failures)
+    return RegressionResult(locked_accuracy, observed_accuracy, accuracy_drop, identity_mismatch or accuracy_drop > allowed_accuracy_drop or bool(new_failures), new_failures, fixed_failures)
