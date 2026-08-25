@@ -23,7 +23,7 @@ The attention harness selects samples in this priority order:
 3. Samples below the confidence threshold
 4. Seeded random coverage
 
-The default evaluation budget is allocated 40% / 30% / 15% / 15%. Every selected sample records its selection reason, attention score, and risk bucket.
+The default evaluation budget is allocated 40% / 30% / 15% / 15%. Unused quota from an earlier attention bucket is given to the next attention bucket before random coverage. Every selected sample records its selection reason, attention score, and risk bucket.
 
 ## Key Features
 
@@ -132,7 +132,7 @@ The bundled example references a user-provided adapter and manifest path; update
 
 ## Attention Sampling Explanation
 
-Selection starts from a stable sample-ID order and uses the suite seed for all draws. A sample is selected once, at its highest-priority applicable bucket. This prevents duplicate computation and makes report provenance stable across identical runs.
+Selection starts from a stable sample-ID order and uses the suite seed for all draws. A sample is selected once, at its highest-priority applicable bucket. Unused quota cascades down the attention order and only then fills random coverage. This prevents duplicate computation and makes report provenance stable across identical runs.
 
 ## Regression Detection Workflow
 

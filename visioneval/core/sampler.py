@@ -13,7 +13,11 @@ _SCORES = {SelectionReason.PREVIOUS_FAILURE: 1.0, SelectionReason.HIGH_RISK: 0.7
 
 
 def select_samples(samples: Iterable[ClassificationSample], config: AttentionConfig) -> list[SelectedSample]:
-    """Select a seed-stable budget with explicit attention provenance."""
+    """Select a seed-stable budget with explicit attention provenance.
+
+    Unused quota from a higher attention bucket is added to the next attention
+    bucket. Remaining slots after all attention buckets fill random coverage.
+    """
     remaining = sorted(samples, key=lambda sample: sample.sample_id)
     if len({sample.sample_id for sample in remaining}) != len(remaining):
         raise ValueError("sample_id values must be unique")
@@ -26,9 +30,12 @@ def select_samples(samples: Iterable[ClassificationSample], config: AttentionCon
         SelectionReason.HIGH_RISK: lambda item: bool(set(item.tags) & set(config.high_risk_tags)),
         SelectionReason.LOW_CONFIDENCE: lambda item: config.low_confidence and item.confidence <= config.low_confidence_threshold,
     }
+    unused = 0
     for reason in _REASONS:
-        chosen = _choose([item for item in remaining if predicates[reason](item)], quotas[reason], generator)
+        quota = quotas[reason] + unused
+        chosen = _choose([item for item in remaining if predicates[reason](item)], quota, generator)
         selected.extend(_trace(item, reason) for item in chosen)
+        unused = quota - len(chosen)
         chosen_ids = {item.sample_id for item in chosen}
         remaining = [item for item in remaining if item.sample_id not in chosen_ids]
     chosen = _choose(remaining, budget - len(selected), generator)

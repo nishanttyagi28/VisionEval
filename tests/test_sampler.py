@@ -36,3 +36,20 @@ def test_attention_sampler_is_seeded_and_order_independent() -> None:
 
     assert first == second
     assert {item.reason for item in first} == {SelectionReason.RANDOM_COVERAGE}
+
+
+def test_unused_attention_quota_cascades_before_random() -> None:
+    """Empty higher buckets donate leftover budget to the next attention bucket."""
+    samples = [
+        *(ClassificationSample(f"risk-{index}", "cat", 0.9, frozenset({"critical"})) for index in range(70)),
+        *(ClassificationSample(f"low-{index}", "cat", 0.1) for index in range(15)),
+        *(ClassificationSample(f"random-{index}", "cat", 0.9) for index in range(15)),
+    ]
+    config = AttentionConfig(budget=100, high_risk_tags=["critical"], seed=17)
+
+    reasons = [item.reason for item in select_samples(samples, config)]
+
+    assert reasons.count(SelectionReason.PREVIOUS_FAILURE) == 0
+    assert reasons.count(SelectionReason.HIGH_RISK) == 70
+    assert reasons.count(SelectionReason.LOW_CONFIDENCE) == 15
+    assert reasons.count(SelectionReason.RANDOM_COVERAGE) == 15
