@@ -136,7 +136,7 @@ Selection starts from a stable sample-ID order and uses the suite seed for all d
 
 ## Regression Detection Workflow
 
-A baseline stores aggregate accuracy and per-sample pass/fail outcomes. A candidate is a regression when it exceeds the configured accuracy-drop tolerance or introduces a new failure. Fixed failures are recorded separately for review.
+A baseline stores aggregate accuracy and per-sample pass/fail outcomes. When outcomes are present, accuracy drop and new/fixed failures are computed only on sample ids that appear in both the baseline and the current run, so attention-driven selection changes do not compare different populations. A run that shares no ids with the locked baseline is a regression. A candidate is a regression when that overlap drop exceeds the configured accuracy-drop tolerance or introduces a new failure on a locked sample. Fixed failures are recorded separately for review. Baselines without per-sample outcomes still use aggregate accuracy.
 
 With `execution.fail_fast: true`, VisionEval processes the deterministic selection sequence one sample at a time. It stops only on a definite new failure, writes a partial report, and returns a regression result. Aggregate accuracy is evaluated after a complete run because an interim value can recover.
 
