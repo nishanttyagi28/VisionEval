@@ -1,0 +1,17 @@
+# Generated from pyproject.toml. Prefer: pip install -e ".[dev]"
+# Core (always installed)
+pydantic>=2,<3
+pyyaml>=6,<7
+rich>=13,<14
+typer>=0.12,<1
+numpy>=1.24,<3
+pillow>=10,<12
+
+# Dev
+pytest>=8,<9
+
+# Optional extras — install via pip install -e ".[hf,api,ui]"
+# hf:      transformers>=4.40  torch>=2.2  accelerate>=0.27
+# api:     openai>=1.30,<2
+# ui:      streamlit>=1.32  plotly>=5.18
+# metrics: transformers>=4.40  torch>=2.2   (real CLIP/BLIP backends)

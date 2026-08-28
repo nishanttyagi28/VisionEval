@@ -1,0 +1,13 @@
+samples:
+  - id: red_square
+    color: red_square
+    caption: A red square on a white background.
+    objects: [square, red square]
+    absent_objects: [cat, car]
+    spatial_notes: square in the center
+  - id: blue_circle
+    color: blue_circle
+    caption: A blue circle on a white background.
+    objects: [circle, blue circle]
+    absent_objects: [tree, person]
+    spatial_notes: circle in the center
