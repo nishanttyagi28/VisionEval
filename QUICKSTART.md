@@ -1,6 +1,6 @@
 # Quickstart
 
-Phase 1 image-classification evaluation from a clean clone. Run all commands from the repository root so suite paths resolve.
+Phase 1 image-classification evaluation from a clean clone, plus the multimodal eval layer. Run all commands from the repository root so suite paths resolve.
 
 ## Install
 
@@ -16,7 +16,16 @@ The installed `visioneval` script does not put the current directory on `PYTHONP
 $env:PYTHONPATH = (Get-Location).Path
 ```
 
-## Demo files
+Linux/macOS:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
+export PYTHONPATH="$(pwd)"
+```
+
+## Demo files (classification CI)
 
 Create `demo_adapter.py`:
 
@@ -100,3 +109,31 @@ Exit code `1`. Markdown lists **REGRESSION**, new-failure ids, and attention buc
 | `artifacts/baselines/demo.json` | Locked identity and per-sample outcomes |
 
 Restore `sample.label` in the adapter before the next baseline update.
+
+---
+
+## Multimodal eval layer
+
+The classification harness above is unchanged. The multimodal layer adds CLIP/BLIP, POPE, an LLM judge, corruptions, VLM adapters, and a Streamlit dashboard. Tests and the demo use mocked backends — no weight downloads, no API keys.
+
+```bash
+python -m pip install -e ".[dev]"
+visioneval multimodal examples/multimodal/config.yaml \
+  --json-out reports/mm.json --markdown-out reports/mm.md
+python -m pytest
+```
+
+Dashboard (optional extra):
+
+```bash
+python -m pip install -e ".[ui]"
+streamlit run app/streamlit_app.py
+```
+
+Real VLMs / CLIP / paid judge:
+
+```bash
+python -m pip install -e ".[hf,api,ui]"
+```
+
+API keys are read from the environment (`OPENAI_API_KEY` by default). Do not commit secrets.
