@@ -1,4 +1,5 @@
 # Generated from pyproject.toml. Prefer: pip install -e ".[dev]"
+# Streamlit Community Cloud prefers app/requirements.txt (next to the entrypoint).
 # Core (always installed)
 pydantic>=2,<3
 pyyaml>=6,<7
