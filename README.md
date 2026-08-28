@@ -5,6 +5,7 @@
 [![CI](https://github.com/nishanttyagi28/VisionEval/actions/workflows/ci.yml/badge.svg)](https://github.com/nishanttyagi28/VisionEval/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=nishanttyagi28/VisionEval&branch=master&mainModule=app/streamlit_app.py)
 
 Static multimodal benchmarks go stale the week they ship. Models memorize the set. Intermittent hallucinations never make the next leaderboard cut.
 
@@ -217,6 +218,24 @@ From the repo root you get:
 | **Export** | Download the same Markdown and JSON the CLI writes |
 
 This dashboard is the multimodal UI. It is **not** the classification CI gate. CLI and pytest never import Streamlit.
+
+### Community Cloud
+
+I cannot deploy this from CI without your Streamlit/GitHub login. Config is in the repo:
+
+- Entrypoint: `app/streamlit_app.py`
+- Python deps: `app/requirements.txt` (CPU-only; Cloud reads this first)
+- App config: `.streamlit/config.toml`
+
+**Deploy (one GitHub sign-in):**
+
+1. Open [share.streamlit.io/deploy](https://share.streamlit.io/deploy?repository=nishanttyagi28/VisionEval&branch=master&mainModule=app/streamlit_app.py) (pre-fills this repo).
+2. **Continue with GitHub** and authorize Streamlit.
+3. Confirm **Repository** `nishanttyagi28/VisionEval`, **Branch** `master`, **Main file path** `app/streamlit_app.py`.
+4. Optional: **Advanced settings** → Python 3.11 or 3.12 (match local). No secrets needed for the FakeVLM demo.
+5. Click **Deploy**. The public URL will be `https://<name>.streamlit.app`.
+
+Send that URL back and it becomes a Live Demo badge. Until then the Streamlit badge above is a deploy button, not a live app.
 
 ---
 

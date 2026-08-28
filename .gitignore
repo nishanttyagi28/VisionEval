@@ -17,6 +17,9 @@ reports/
 cache/
 logs/
 
+# Streamlit
+.streamlit/secrets.toml
+
 # Editors and operating systems
 .vscode/
 .idea/
