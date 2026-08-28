@@ -1,0 +1,34 @@
+# Multimodal evaluation layer (sits beside the Phase 1 classification harness).
+# Run: visioneval multimodal examples/multimodal/config.yaml \
+#        --json-out reports/mm.json --markdown-out reports/mm.md
+name: multimodal-demo
+caption_prompt: Describe the image in detail. Mention objects and their spatial layout.
+models:
+  - name: fake-detailed
+    kind: fake
+    latency_ms: 0
+    responses:
+      red_square: A red square sits in the center of a white background.
+      blue_circle: A blue circle sits in the center of a white background.
+  - name: fake-sparse
+    kind: fake
+    latency_ms: 0
+    default_response: A shape.
+samples_path: samples.yaml
+metrics:
+  clip: true
+  blip: true
+  pope: true
+  llm_judge: true
+  clip_backend: mock
+  blip_backend: mock
+corruptions:
+  enabled: true
+  types: [gaussian_noise, motion_blur, contrast_jitter, occlusion]
+  severities: [0.25, 0.5]
+  seed: 0
+judge:
+  backend: mock
+report:
+  json_path: reports/multimodal.json
+  markdown_path: reports/multimodal.md

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "visioneval"
 version = "0.1.0"
-description = "A focused evaluation harness for image-classification regressions."
+description = "CI-first vision regression harness plus a modular multimodal evaluation framework."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
@@ -15,10 +15,36 @@ dependencies = [
     "pyyaml>=6,<7",
     "rich>=13,<14",
     "typer>=0.12,<1",
+    "numpy>=1.24,<3",
+    "pillow>=10,<12",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<9"]
+hf = [
+    "transformers>=4.40",
+    "torch>=2.2",
+    "accelerate>=0.27",
+]
+api = [
+    "openai>=1.30,<2",
+]
+ui = [
+    "streamlit>=1.32",
+    "plotly>=5.18",
+]
+metrics = [
+    "transformers>=4.40",
+    "torch>=2.2",
+]
+all = [
+    "transformers>=4.40",
+    "torch>=2.2",
+    "accelerate>=0.27",
+    "openai>=1.30,<2",
+    "streamlit>=1.32",
+    "plotly>=5.18",
+]
 
 [project.scripts]
 visioneval = "visioneval.cli:app"
@@ -29,3 +55,6 @@ addopts = "--basetemp=.pytest-tmp"
 
 [tool.setuptools.packages.find]
 include = ["visioneval*"]
+
+[tool.setuptools.package-data]
+visioneval = ["py.typed"]

@@ -1,10 +1,13 @@
 # VisionEval
 
-**CI-first evaluation harness for image-classification models.** It spends a fixed budget on the samples most likely to regress, compares the result to a git-trackable baseline, and fails the job with evidence—not a single accuracy number.
+Two layers, one package:
 
-Phase 1 supports **image classification** only. It is not a training framework, serving stack, data platform, or dashboard.
+1. **Phase 1 classification CI harness** — deterministic, risk-focused image-classification evaluation that fails a job on a new failure or an accuracy drop against a git-trackable baseline.
+2. **Multimodal evaluation framework** — CLIP/BLIP alignment, POPE hallucination probes, structured LLM-as-a-judge, corruption stress tests, unified VLM adapters, inference profiling, and a Streamlit comparison dashboard.
 
-## The problem
+The multimodal layer **sits beside** the CI harness. It does not replace `visioneval run`, the attention sampler, SQLite failure memory, or baseline lockfiles.
+
+## The problem (CI harness)
 
 Aggregate accuracy can hide a drop on safety-critical or previously failing images. Scoring every sample on every commit is often too slow for CI. VisionEval evaluates a **deterministic, risk-focused subset** and treats a new failure or an accuracy drop on the **same locked population** as a release blocker.
 
@@ -12,25 +15,44 @@ Aggregate accuracy can hide a drop on safety-critical or previously failing imag
 
 ```mermaid
 flowchart LR
-  A[Suite YAML + manifest] --> B[Attention sampler]
-  B --> C[Model adapter]
-  C --> D[SQLite WAL cache]
-  D --> E[Scorer]
-  E --> F[Baseline lockfile]
-  F --> G[Markdown + JSON]
-  F --> H[CLI exit 0 / 1]
+  subgraph ci [Phase 1 CI harness]
+    A[Suite YAML + manifest] --> B[Attention sampler]
+    B --> C[Classification adapter]
+    C --> D[SQLite WAL cache]
+    D --> E[Scorer]
+    E --> F[Baseline lockfile]
+    F --> G[Markdown + JSON]
+    F --> H[CLI exit 0 / 1]
+  end
+  subgraph mm [Multimodal eval layer]
+    I[Eval YAML] --> J[Unified VLM]
+    J --> K[CLIP / BLIP / POPE / Judge]
+    J --> L[Corruptions + degradation]
+    J --> M[TTFT / VRAM / throughput]
+    K --> N[Markdown + JSON]
+    N --> O[Streamlit dashboard]
+  end
 ```
 
 ```text
 visioneval/
-  cli.py              visioneval run
-  core/               suite, sampler, runner, cache, baseline, reports
-  classification/     adapter loading, scoring, optional Torchvision / ONNX backends
-examples/             suite YAML template
-tests/                pytest
+  cli.py                 visioneval run | visioneval multimodal
+  core/                  Phase 1 suite, sampler, runner, cache, baseline, reports
+  classification/        adapter loading, scoring, optional Torchvision / ONNX
+  metrics/               CLIPScore, BLIP-Score, POPE, LLM-as-a-judge (swappable)
+  robustness/            gaussian noise, motion blur, contrast, occlusion + drop-off
+  models/                Fake / HuggingFace / OpenAI-compatible VLM wrappers
+  profiling/             TTFT, total time, GPU VRAM, throughput
+  report/                multimodal Markdown + JSON serializers
+  multimodal/            YAML config + end-to-end pipeline
+app/streamlit_app.py     side-by-side comparison dashboard
+examples/                classification suite + multimodal demo
+tests/                   pytest (CI harness + multimodal math)
 ```
 
-## Attention-guided evaluation
+---
+
+## Phase 1 — attention-guided classification CI
 
 Selection is seed-stable and ordered by priority. A sample is chosen once, at its highest matching bucket:
 
@@ -41,11 +63,11 @@ Selection is seed-stable and ordered by priority. A sample is chosen once, at it
 
 Default budget split: **40% / 30% / 15% / 15%**. Unused quota from an earlier attention bucket is given to the next attention bucket before random coverage. Every record stores `selection_reason`, `attention_score`, and `risk_bucket`.
 
-## Failure memory
+### Failure memory
 
 The local SQLite store keeps more than the last pass/fail bit: **`fail_count`** and **`consecutive_passes`**. A sample stays in the previous-failure bucket until it **passes twice in a row**, so one recovered run does not drop intermittent failures. The same database caches predictions; keys include model identity, preprocess identity, and image bytes when `image_path` is set.
 
-## Regression detection
+### Regression detection
 
 `--update-baseline` writes a sorted JSON lockfile: accuracy, per-sample outcomes, suite hash, model id, attention seed, budget, and selected sample ids. Later runs:
 
@@ -56,63 +78,139 @@ The local SQLite store keeps more than the last pass/fail bit: **`fail_count`** 
 
 With `execution.fail_fast: true`, evaluation is sequential and stops on the first **new** failure, then writes a partial report. Do not pass `--update-baseline` in CI.
 
-## Quick start
+### Quick start (classification CI)
 
 Python 3.10+. From the repository root:
 
-```powershell
+```bash
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+# Windows PowerShell: .\.venv\Scripts\Activate.ps1
+source .venv/bin/activate
 python -m pip install -e ".[dev]"
-$env:PYTHONPATH = (Get-Location).Path
+export PYTHONPATH="$(pwd)"   # Windows: $env:PYTHONPATH = (Get-Location).Path
 ```
 
-Add a `module:callable` adapter that maps `ClassificationSample` → `ClassificationPrediction`, a YAML manifest (`id`, `label`, `confidence`, optional `tags` / `image_path`), and a suite YAML. Then:
-
-```powershell
+```bash
 visioneval run demo_suite.yaml --update-baseline
 visioneval run demo_suite.yaml
 ```
 
-The second command exits `0` on **PASS**. Change the adapter to return a wrong label and rerun: exit `1`, status **REGRESSION**.
+The second command exits `0` on **PASS**. Full file contents: [QUICKSTART.md](QUICKSTART.md). Walkthrough with fail-fast: [DEMO_GUIDE.md](DEMO_GUIDE.md).
 
-Full file contents: [QUICKSTART.md](QUICKSTART.md). Walkthrough with fail-fast: [DEMO_GUIDE.md](DEMO_GUIDE.md).
+The installed `visioneval` script does not put the current directory on `PYTHONPATH`; set it as above so a local adapter imports. Optional Torchvision and ONNX adapters in `visioneval.classification.backends` load lazily.
 
-The installed `visioneval` script does not put the current directory on `PYTHONPATH`; set it as above so a local adapter imports. Optional Torchvision and ONNX adapters in `visioneval.classification.backends` load lazily—install those runtimes only if you use them.
+---
 
-## Sample Markdown report
+## Multimodal evaluation framework
 
-Produced by a fail-fast candidate run after the adapter started returning `dog` instead of `cat`:
+Four pillars, all swappable, all testable without downloading weights or hitting paid APIs.
 
-```markdown
-# VisionEval: phase1-demo
+### Pillar 1 — metrics
 
-- Status: **REGRESSION**
-- Accuracy: `0.0000`
-- Evaluated samples: `1`
-- Prediction cache: `0` hits / `1` misses
-- Attention buckets: `high_risk` `1`
-- Execution: **FAIL-FAST**
-- Remaining samples: `2`
-- Failing sample: `one` (high_risk, score `0.75`)
-- Accuracy drop: `1.0000`
-- New failures: `1` (`one`)
-- Fixed failures: `0` (none)
+| Metric | What it scores | Default backend |
+| --- | --- | --- |
+| **CLIPScore** | Semantic image–text alignment (`w * max(cos, 0)`, `w = 2.5`) | hashed mock |
+| **BLIP-Score** | Image–text matching probability in `[0, 1]` | hashed mock |
+| **POPE** | Visual hallucinations: accuracy, precision, recall, F1 | yes/no probes |
+| **LLM-as-a-judge** | `detail_richness`, `factual_consistency`, `spatial_accuracy` as JSON | heuristic mock |
+
+Real CLIP/BLIP weights (`transformers`) and a paid JSON judge (`openai`) are optional extras. Tests always use mocks.
+
+### Pillar 2 — robustness
+
+Corruptions: Gaussian noise, motion blur, contrast jitter, random occlusion. Each is seeded and identity at severity `0`. The pipeline re-runs metrics across severities and reports **drop-off** `(clean - corrupted) / |clean|` and **resilience** `1 - mean(drop-off)`.
+
+### Pillar 3 — models and profiling
+
+`VisionLanguageModel` / `BaseVLM` with three adapters:
+
+- `fake` — lookup-table captioner + POPE yes/no from an object map (always importable)
+- `hf` — HuggingFace `Qwen2-VL` / `LLaVA` / Auto (extra `hf`)
+- `api` — OpenAI-compatible vision chat (extra `api`)
+
+Every generation records **TTFT**, **total inference time**, **GPU VRAM** (when CUDA is present), and **throughput** (tokens/s).
+
+### Pillar 4 — dashboard and reports
+
+```bash
+pip install -e ".[ui]"
+streamlit run app/streamlit_app.py
 ```
 
-JSON (`records`, cache totals, `regression.new_failures`) is for automation. Publish both as CI artifacts and gate on the CLI exit code. This repo’s GitHub Actions workflow runs **pytest**.
+Side-by-side responses, POPE hallucination scores, radar charts, and downloadable Markdown/JSON. CLI reports use the same serializers:
+
+```bash
+visioneval multimodal examples/multimodal/config.yaml \
+  --json-out reports/mm.json --markdown-out reports/mm.md
+```
+
+### Install extras
+
+```bash
+pip install -e ".[dev]"           # tests + core (numpy, pillow, pydantic, ...)
+pip install -e ".[hf,api,ui]"     # real VLMs, OpenAI-compatible APIs, Streamlit
+pip install -e ".[metrics]"       # real CLIP/BLIP via transformers (pulls torch)
+pip install -e ".[all]"           # everything
+```
+
+A laptop without a GPU can `import visioneval` and run the fake/mock stack. HuggingFace and API adapters raise a clear `ImportError` that names the extra until you install it.
+
+### YAML config (multimodal)
+
+See [`examples/multimodal/config.yaml`](examples/multimodal/config.yaml). Models, metric toggles, corruption types/severities, and the judge prompt live in one file. Samples can be inline or a separate `samples_path`. Tiny RGB scenes are synthesised from a `color` key (`red_square`, `blue_circle`, `green_split`) so the demo never ships binary weights or datasets.
+
+HF / API sketches:
+
+```yaml
+models:
+  - name: qwen2-vl
+    kind: hf
+    model_id: Qwen/Qwen2-VL-2B-Instruct
+    hf_kind: qwen2_vl
+  - name: gpt-4o-mini
+    kind: api
+    model: gpt-4o-mini
+    api_key_env: OPENAI_API_KEY   # read from the environment only
+```
+
+### How the two layers compose
+
+| Concern | CI harness (`visioneval run`) | Multimodal layer (`visioneval multimodal`) |
+| --- | --- | --- |
+| Task | Image classification | Captioning / VQA / VLM comparison |
+| Gate | Baseline lockfile, exit 1 on regression | Report scores; does not fail the Phase 1 gate |
+| Sampling | Attention budget over a manifest | Explicit sample list (tiny fixtures or your images) |
+| Models | `module:callable` classification adapter | Fake / HF / OpenAI-compatible VLM |
+| CI | `.github/workflows/ci.yml` runs pytest for **both** | Same job; mocks keep it CPU-only |
+
+Use the harness as the release blocker. Use the multimodal layer to compare VLMs, hunt hallucinations, and measure robustness. Shared conventions: YAML config, pytest, Markdown+JSON evidence, no secrets in git.
+
+---
+
+## Tests
+
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest
+```
+
+Coverage includes CLIP/BLIP math, POPE aggregation, corruption functions, degradation scores, report serializers, the unified VLM interface (fakes/stubs), profiling, and the multimodal pipeline. Tests never download HuggingFace weights or call paid APIs.
 
 ## Roadmap
 
-**Now (Phase 1):** image classification, attention sampling, SQLite memory and prediction cache, git-native baseline lockfile, overlap-based regression, sequential fail-fast, Markdown/JSON reports.
+**Phase 1 (present):** image classification, attention sampling, SQLite memory and prediction cache, git-native baseline lockfile, overlap-based regression, sequential fail-fast, Markdown/JSON reports.
 
-**Next:** deterministic process-pool execution for **complete, non-fail-fast** runs. Fail-fast stays sequential so stop order and partial evidence stay unambiguous.
+**Multimodal layer (present):** CLIP/BLIP, POPE, structured judge, corruptions, VLM adapters, profiling, Streamlit.
 
-**Out of scope:** detection, OCR, segmentation, distributed runners, dashboards, cloud services.
+**Next:** deterministic process-pool execution for **complete, non-fail-fast** Phase 1 runs. Fail-fast stays sequential.
+
+**Out of scope for Phase 1:** detection, OCR, segmentation, distributed runners, cloud services. The Streamlit app belongs to the multimodal layer, not the classification CI gate.
+
+Known Phase 1 gaps: [ARCHITECTURE_GAP_REPORT.md](ARCHITECTURE_GAP_REPORT.md).
 
 ## Contributing
 
-Keep changes small, deterministic, and tested (`python -m pytest`). Prefer plain functions and dataclasses. Do not add other modalities until Phase 1 needs them.
+Keep changes small, deterministic, and tested (`python -m pytest`). Prefer plain functions and dataclasses. Do not break the classification CI harness when extending the multimodal layer.
 
 ## License
 
