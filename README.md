@@ -277,7 +277,7 @@ A laptop without a GPU can `import visioneval` and run the fake/mock stack. Hugg
 ## How the layers compose
 
 | Concern | `visioneval run` | `visioneval multimodal` | `visioneval traps` |
-| --- | --- | --- |
+| --- | --- | --- | --- |
 | Task | Image classification | Captioning / VQA / VLM comparison | Persistent hallucination tests |
 | Gate | Baseline lockfile, exit 1 | Report scores | Trap lockfile, exit 1 on `--check-baseline` |
 | Memory | `sample_outcomes` / `predictions` | None by default | `vlm_traps` |
