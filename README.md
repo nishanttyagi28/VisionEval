@@ -5,7 +5,7 @@ Two layers, one package:
 1. **Phase 1 classification CI harness** — deterministic, risk-focused image-classification evaluation that fails a job on a new failure or an accuracy drop against a git-trackable baseline.
 2. **Multimodal evaluation framework** — CLIP/BLIP alignment, POPE hallucination probes, structured LLM-as-a-judge, corruption stress tests, unified VLM adapters, inference profiling, and a Streamlit comparison dashboard.
 
-The multimodal layer **sits beside** the CI harness. It does not replace `visioneval run`, the attention sampler, SQLite failure memory, or baseline lockfiles.
+The multimodal layer **sits beside** the CI harness. It does not replace `visioneval run`, the attention sampler, SQLite failure memory, or baseline lockfiles. Living traps are a third, opt-in memory for VLM hallucinations (`vlm_traps`); they never write classification tables.
 
 ## The problem (CI harness)
 
@@ -36,7 +36,7 @@ flowchart LR
 
 ```text
 visioneval/
-  cli.py                 visioneval run | visioneval multimodal
+  cli.py                 visioneval run | visioneval multimodal | visioneval traps
   core/                  Phase 1 suite, sampler, runner, cache, baseline, reports
   classification/        adapter loading, scoring, optional Torchvision / ONNX
   metrics/               CLIPScore, BLIP-Score, POPE, LLM-as-a-judge (swappable)
@@ -45,6 +45,7 @@ visioneval/
   profiling/             TTFT, total time, GPU VRAM, throughput
   report/                multimodal Markdown + JSON serializers
   multimodal/            YAML config + end-to-end pipeline
+  traps/                 living VLM hallucination traps (SQLite WAL, opt-in)
 app/streamlit_app.py     side-by-side comparison dashboard
 examples/                classification suite + multimodal demo
 tests/                   pytest (CI harness + multimodal math)
@@ -187,6 +188,30 @@ Use the harness as the release blocker. Use the multimodal layer to compare VLMs
 
 ---
 
+## Living traps (VLM hallucinations)
+
+Every multimodal hallucination can become a **durable trap** in SQLite until the same model beats it **twice in a row** (`consecutive_passes`, same idea as classification failure memory). Traps do **not** replace Phase 1.
+
+Harvest sources:
+
+- POPE miss (wrong yes/no vs expected)
+- LLM-judge flags or low `factual_consistency`
+- Caption vs expected objects mismatch
+
+Storage uses the same WAL pattern as classification memory but **different table names** (`vlm_traps` vs `sample_outcomes` / `predictions`). Open traps consume replay budget before new or random samples. An optional seeded generator mints a hard-negative POPE variant (same sample, rewritten probe or swapped absent object).
+
+```bash
+visioneval multimodal examples/multimodal/config.yaml
+visioneval traps list --db artifacts/traps.sqlite3
+visioneval traps harvest reports/multimodal.json --db artifacts/traps.sqlite3
+visioneval traps run --db artifacts/traps.sqlite3 --config examples/multimodal/config.yaml --budget 8
+visioneval traps update-baseline --db artifacts/traps.sqlite3 --lockfile artifacts/baselines/traps.json
+```
+
+The example YAML has an opt-in `traps:` block (`enabled`, `db`, `retire_after_consecutive_passes: 2`, `generate_hard_negatives`). `visioneval traps update-baseline` writes a git-trackable JSON lock of open-trap ids/outcomes so a retired trap that reappears, or an open trap that gets worse, is a regression. Streamlit shows a compact **Traps still open** panel (count + ids). The dashboard stays an extra; CLI and tests never import Streamlit.
+
+---
+
 ## Tests
 
 ```bash
@@ -194,13 +219,13 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
-Coverage includes CLIP/BLIP math, POPE aggregation, corruption functions, degradation scores, report serializers, the unified VLM interface (fakes/stubs), profiling, and the multimodal pipeline. Tests never download HuggingFace weights or call paid APIs.
+Coverage includes CLIP/BLIP math, POPE aggregation, corruption functions, degradation scores, report serializers, the unified VLM interface (fakes/stubs), profiling, the multimodal pipeline, and living traps (harvest / retire / hard-negatives). Tests never download HuggingFace weights or call paid APIs.
 
 ## Roadmap
 
 **Phase 1 (present):** image classification, attention sampling, SQLite memory and prediction cache, git-native baseline lockfile, overlap-based regression, sequential fail-fast, Markdown/JSON reports.
 
-**Multimodal layer (present):** CLIP/BLIP, POPE, structured judge, corruptions, VLM adapters, profiling, Streamlit.
+**Multimodal layer (present):** CLIP/BLIP, POPE, structured judge, corruptions, VLM adapters, profiling, Streamlit, living traps.
 
 **Next:** deterministic process-pool execution for **complete, non-fail-fast** Phase 1 runs. Fail-fast stays sequential.
 
