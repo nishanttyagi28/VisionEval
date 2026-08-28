@@ -8,6 +8,24 @@
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-visioneval.streamlit.app-FF4B4B?logo=streamlit&logoColor=white)](https://visioneval.streamlit.app)
 [![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://visioneval.streamlit.app)
 
+
+<p align="center">
+  <sup><a href="https://visioneval.streamlit.app">Live demo → visioneval.streamlit.app</a> · no login, CPU-only fake models</sup>
+</p>
+
+<p align="center">
+  <img src="docs/assets/streamlit-red-square.svg" alt="Side-by-side VLM comparison on red_square" width="410">
+  &nbsp;
+  <img src="docs/assets/streamlit-blue-circle.svg" alt="Metric radar and Markdown/JSON export on blue_circle" width="410">
+</p>
+
+<p align="center">
+  <sub>
+    Left: <code>red_square</code> — fake-left names the square, fake-right stays generic, both POPE F1 1.000.
+    Right: <code>blue_circle</code> — same pair, metric radar and export.
+  </sub>
+</p>
+
 Static multimodal benchmarks go stale the week they ship. Models memorize the set. Intermittent hallucinations never make the next leaderboard cut.
 
 VisionEval is a **CI-native** evaluation stack for vision and VLMs:
@@ -200,6 +218,14 @@ The `fake-sparse` demo model (`A shape.`) typically mints caption + judge traps 
 ---
 
 ## Streamlit preview
+
+**[Live demo](https://visioneval.streamlit.app)** — side-by-side VLM captions, POPE hallucination scores, a metric radar, and Markdown/JSON export. Fake models, no GPU, no login.
+
+| `red_square` comparison | `blue_circle` radar + export |
+|:---:|:---:|
+| ![Side-by-side captions and POPE F1 on red_square](docs/assets/streamlit-red-square.svg) | ![Metric radar and download buttons on blue_circle](docs/assets/streamlit-blue-circle.svg) |
+
+Run it locally:
 
 ```bash
 python -m pip install -e ".[ui]"
