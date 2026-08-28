@@ -21,7 +21,7 @@ from visioneval.metrics.llm_judge import (
     MockJudgeBackend,
     OpenAIJudgeBackend,
 )
-from visioneval.metrics.pope import PopeQuestion, aggregate_pope, build_pope_questions
+from visioneval.metrics.pope import PopeQuestion, aggregate_pope, build_pope_questions, parse_yes_no
 from visioneval.models.base import BaseVLM
 from visioneval.models.factory import build_model
 from visioneval.multimodal.config import (
@@ -35,6 +35,7 @@ from visioneval.profiling.profiler import profile_generation
 from visioneval.report.serializers import write_multimodal_reports
 from visioneval.robustness.corruptions import apply_corruption
 from visioneval.robustness.degradation import summarize_degradation
+from visioneval.traps.types import image_identity
 
 
 def _alignment_backend(kind: str, model_id: str, family: str) -> Any:
@@ -75,11 +76,30 @@ def _build_metrics(config: MultimodalEvalConfig) -> dict[str, Any]:
 def _pope_for_response(sample: SampleConfig, response: str, ask) -> dict[str, Any]:
     questions = build_pope_questions(sample.objects, sample.absent_objects)
     pairs: list[tuple[PopeQuestion, str]] = []
+    probes: list[dict[str, Any]] = []
     for question in questions:
-        answer = ask(question.rendered_prompt())
+        prompt = question.rendered_prompt()
+        answer = ask(prompt)
         pairs.append((question, answer))
-    scores = aggregate_pope(pairs)
-    return scores.as_dict()
+        predicted = parse_yes_no(answer)
+        expected = question.expected_present
+        if predicted is None:
+            correct = False
+        else:
+            correct = predicted is expected
+        probes.append(
+            {
+                "object": question.object_name,
+                "expected_present": expected,
+                "prompt": prompt,
+                "answer": answer,
+                "predicted": predicted,
+                "correct": correct,
+            }
+        )
+    payload = aggregate_pope(pairs).as_dict()
+    payload["probes"] = probes
+    return payload
 
 
 def _score_sample(
@@ -145,6 +165,10 @@ def _evaluate_image(
         "prompt": prompt,
         "response": generation.text,
         "profile": profile.as_dict(),
+        "objects": list(sample.objects),
+        "absent_objects": list(sample.absent_objects),
+        "color": sample.color,
+        "image_hash": image_identity(sample.id, sample.image, sample.color),
         **scored,
     }
 
@@ -163,7 +187,18 @@ def run_multimodal_eval(
         config = load_multimodal_config(path)
     root = str(config_dir) if config_dir is not None else None
 
-    object_map = {sample.id: list(sample.objects) for sample in config.samples}
+    samples = list(config.samples)
+    trap_store = None
+    if config.traps.enabled:
+        from visioneval.traps.store import TrapStore
+
+        trap_store = TrapStore(Path(config.traps.db))
+        open_ids = {trap.sample_id for trap in trap_store.list_open()}
+        samples = [item for item in samples if item.id in open_ids] + [
+            item for item in samples if item.id not in open_ids
+        ]
+
+    object_map = {sample.id: list(sample.objects) for sample in samples}
     models = []
     for spec in config.models:
         payload = spec.to_factory_dict()
@@ -186,7 +221,7 @@ def run_multimodal_eval(
         return values
 
     for model in models:
-        for sample in config.samples:
+        for sample in samples:
             image = load_sample_image(sample.image, sample.color, root)
             clean = _evaluate_image(
                 image=image,
@@ -250,6 +285,40 @@ def run_multimodal_eval(
         "layer": "multimodal",
         "composes_with": "visioneval run (Phase 1 classification CI harness)",
     }
+
+    if config.traps.enabled:
+        from visioneval.traps.harvest import harvest_report
+        from visioneval.traps.store import TrapStore
+
+        store = trap_store or TrapStore(Path(config.traps.db))
+        summary = harvest_report(
+            result,
+            store,
+            generate_hard_negatives=config.traps.generate_hard_negatives,
+        )
+        evaluated_keys = {
+            (row.get("model"), row.get("sample_id"))
+            for row in records
+            if row.get("corruption") in (None, "", "clean", "none")
+        }
+        failure_ids = set(summary.failure_ids)
+        minted = set(summary.trap_ids) - failure_ids
+        for trap in store.list_open():
+            if trap.trap_id in failure_ids or trap.trap_id in minted:
+                continue
+            if (trap.model, trap.sample_id) not in evaluated_keys:
+                continue
+            store.record_outcome(
+                trap.trap_id,
+                True,
+                retire_after=config.traps.retire_after_consecutive_passes,
+            )
+        result["traps"] = {
+            "db": str(store.path),
+            "open": store.count_open(),
+            "open_ids": [trap.trap_id for trap in store.list_open()],
+            "harvest": summary.as_dict(),
+        }
 
     json_out = json_path
     md_out = markdown_path

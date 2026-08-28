@@ -89,6 +89,22 @@ class ReportPaths(BaseModel):
     markdown_path: str | None = None
 
 
+class TrapsConfig(BaseModel):
+    """Opt-in living-trap memory. Disabled by default; does not affect Phase 1."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    enabled: bool = False
+    db: str = "artifacts/traps.sqlite3"
+    retire_after_consecutive_passes: int = 2
+    generate_hard_negatives: bool = False
+
+    @model_validator(mode="after")
+    def retire_after_positive(self) -> "TrapsConfig":
+        if self.retire_after_consecutive_passes < 1:
+            raise ValueError("retire_after_consecutive_passes must be >= 1")
+        return self
+
+
 class MultimodalEvalConfig(BaseModel):
     """Top-level multimodal eval config. Independent of Phase 1 suite YAML."""
 
@@ -102,6 +118,7 @@ class MultimodalEvalConfig(BaseModel):
     corruptions: CorruptionConfig = Field(default_factory=CorruptionConfig)
     judge: JudgeConfig = Field(default_factory=JudgeConfig)
     report: ReportPaths | None = None
+    traps: TrapsConfig = Field(default_factory=TrapsConfig)
 
     @model_validator(mode="after")
     def samples_or_path(self) -> "MultimodalEvalConfig":

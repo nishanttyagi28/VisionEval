@@ -32,3 +32,8 @@ judge:
 report:
   json_path: reports/multimodal.json
   markdown_path: reports/multimodal.md
+traps:
+  enabled: true
+  db: artifacts/traps.sqlite3
+  retire_after_consecutive_passes: 2
+  generate_hard_negatives: true
