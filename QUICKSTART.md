@@ -120,8 +120,13 @@ The classification harness above is unchanged. The multimodal layer adds CLIP/BL
 python -m pip install -e ".[dev]"
 visioneval multimodal examples/multimodal/config.yaml \
   --json-out reports/mm.json --markdown-out reports/mm.md
+visioneval traps list --db artifacts/traps.sqlite3
+visioneval traps harvest reports/mm.json --db artifacts/traps.sqlite3
+visioneval traps run --db artifacts/traps.sqlite3 --config examples/multimodal/config.yaml --budget 8
 python -m pytest
 ```
+
+Living traps are opt-in SQLite memory for VLM hallucinations (POPE misses, judge flags, caption/object mismatches). They retire after two consecutive passes and do not replace `visioneval run`.
 
 Dashboard (optional extra):
 
