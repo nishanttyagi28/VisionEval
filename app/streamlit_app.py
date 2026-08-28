@@ -57,6 +57,28 @@ def _normalise_clip(value: float) -> float:
     return max(0.0, min(1.0, value / 2.5))
 
 
+def _traps_panel() -> None:
+    """Compact open-trap count + ids. Streamlit-only; CLI never imports this module."""
+    st.sidebar.divider()
+    st.sidebar.subheader("Traps still open")
+    db = st.sidebar.text_input("Traps DB", "artifacts/traps.sqlite3")
+    path = Path(db)
+    if not path.is_file():
+        st.sidebar.caption("No traps database yet. Harvest from a multimodal JSON report.")
+        return
+    from visioneval.traps.store import TrapStore
+
+    open_traps = TrapStore(path).list_open()
+    st.sidebar.metric("Open traps", len(open_traps))
+    ids = [trap.trap_id for trap in open_traps]
+    if ids:
+        st.sidebar.code("\n".join(ids[:40]), language=None)
+        if len(ids) > 40:
+            st.sidebar.caption(f"+ {len(ids) - 40} more")
+    else:
+        st.sidebar.caption("None \u2014 every trap is retired.")
+
+
 def _evaluate(image: Image.Image, sample: dict, model, caption: str, objects: list[str], absent: list[str]) -> dict:
     generation, profile = profile_generation(
         lambda: model.generate(image, "Describe the image in detail.", sample_id=sample.get("id"))
@@ -100,7 +122,7 @@ def _evaluate(image: Image.Image, sample: dict, model, caption: str, objects: li
     }
 
 
-st.title("VisionEval — multimodal comparison")
+st.title("VisionEval \u2014 multimodal comparison")
 st.caption(
     "Side-by-side VLM responses, hallucination (POPE) scores, and a metric radar. "
     "This dashboard is the UI for the multimodal eval layer; the Phase 1 CI harness "
@@ -113,6 +135,7 @@ st.sidebar.json(backends)
 st.sidebar.markdown(
     "HF and API adapters are optional extras. The demo Fake VLM always works."
 )
+_traps_panel()
 
 source = st.sidebar.radio("Image source", ["Demo fixture", "Upload"])
 if source == "Upload":
@@ -192,8 +215,8 @@ cols = st.columns(len(models) + 1)
 with cols[0]:
     st.subheader("Input")
     st.image(image, caption=caption, use_container_width=True)
-    st.markdown("**Present objects:** " + (", ".join(objects) or "—"))
-    st.markdown("**Absent objects (POPE negatives):** " + (", ".join(absent) or "—"))
+    st.markdown("**Present objects:** " + (", ".join(objects) or "\u2014"))
+    st.markdown("**Absent objects (POPE negatives):** " + (", ".join(absent) or "\u2014"))
 
 rows = []
 for column, model in zip(cols[1:], models):
@@ -209,12 +232,12 @@ for column, model in zip(cols[1:], models):
         pope = row["pope"]
         st.metric("POPE F1 (hallucination)", f"{pope['f1']:.3f}")
         st.caption(
-            f"acc {pope['accuracy']:.3f} · P {pope['precision']:.3f} · "
-            f"R {pope['recall']:.3f} · yes-ratio {pope['yes_ratio']:.3f}"
+            f"acc {pope['accuracy']:.3f} \u00b7 P {pope['precision']:.3f} \u00b7 "
+            f"R {pope['recall']:.3f} \u00b7 yes-ratio {pope['yes_ratio']:.3f}"
         )
         profile = row["profile"]
         st.caption(
-            f"TTFT {profile['ttft_ms']:.1f} ms · total {profile['total_ms']:.1f} ms · "
+            f"TTFT {profile['ttft_ms']:.1f} ms \u00b7 total {profile['total_ms']:.1f} ms \u00b7 "
             f"VRAM {profile['vram_mb'] if profile['vram_mb'] is not None else 'n/a'} MiB"
         )
         fig = _radar(row["radar"])
