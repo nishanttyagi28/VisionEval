@@ -6,7 +6,7 @@ import typer
 
 app = typer.Typer(
     name="visioneval",
-    help="Evaluate vision models: Phase 1 classification CI, plus multimodal eval.",
+    help="Evaluate vision models: Phase 1 classification CI, budget analysis, plus multimodal eval.",
     no_args_is_help=True,
 )
 
@@ -41,6 +41,30 @@ def run(
     typer.echo(f"Accuracy: {result.summary.accuracy:.4f}")
     if result.regression and result.regression.is_regression:
         raise typer.Exit(code=1)
+
+
+@app.command("budget-analyze")
+def budget_analyze(
+    suite: Path = typer.Argument(..., help="Path to a Phase 1 classification suite YAML."),
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON instead of human text."),
+    top: int = typer.Option(10, "--top", min=0, help="How many top-risk samples to list."),
+    traps_db: Path | None = typer.Option(
+        None,
+        "--traps-db",
+        help="Living-traps SQLite. Open traps count as previous failures. Default: artifacts/traps.sqlite3 if present.",
+    ),
+) -> None:
+    """Recommend a deterministic evaluation budget. CPU-only, no model inference."""
+    from visioneval.core.budget import (
+        analyze_suite,
+        default_traps_db,
+        format_human,
+        to_json,
+    )
+
+    traps_path = traps_db if traps_db is not None else default_traps_db()
+    analysis = analyze_suite(suite, traps_db=traps_path, top_n=top)
+    typer.echo(to_json(analysis) if json_output else format_human(analysis), nl=False)
 
 
 @app.command("multimodal")
