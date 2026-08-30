@@ -45,7 +45,7 @@ Python 3.10+. From the repository root:
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate          # Windows: .\\.venv\\Scripts\\Activate.ps1
+source .venv/bin/activate          # Windows: .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
 export PYTHONPATH="$(pwd)"         # Windows: $env:PYTHONPATH = (Get-Location).Path
 python -m pytest
@@ -63,14 +63,14 @@ visioneval budget-analyze demo_suite.yaml --json
 **Multimodal eval + living traps** (CPU, no GPU, no API keys)
 
 ```bash
-visioneval multimodal examples/multimodal/config.yaml \\
+visioneval multimodal examples/multimodal/config.yaml \
   --json-out reports/mm.json --markdown-out reports/mm.md
 
 visioneval traps list --db artifacts/traps.sqlite3
 visioneval traps harvest reports/multimodal.json --db artifacts/traps.sqlite3
-visioneval traps run --db artifacts/traps.sqlite3 \\
+visioneval traps run --db artifacts/traps.sqlite3 \
   --config examples/multimodal/config.yaml --budget 8
-visioneval traps update-baseline --db artifacts/traps.sqlite3 \\
+visioneval traps update-baseline --db artifacts/traps.sqlite3 \
   --lockfile artifacts/baselines/traps.json
 ```
 
@@ -196,11 +196,11 @@ Each one becomes a row in **`vlm_traps`** (same SQLite WAL pattern as classifica
 
 ```bash
 visioneval traps list --db artifacts/traps.sqlite3 --status open
-visioneval traps harvest reports/multimodal.json --db artifacts/traps.sqlite3 \\
+visioneval traps harvest reports/multimodal.json --db artifacts/traps.sqlite3 \
   --generate-hard-negatives --seed 0
-visioneval traps run --db artifacts/traps.sqlite3 \\
+visioneval traps run --db artifacts/traps.sqlite3 \
   --config examples/multimodal/config.yaml --budget 8 --retire-after 2
-visioneval traps update-baseline --db artifacts/traps.sqlite3 \\
+visioneval traps update-baseline --db artifacts/traps.sqlite3 \
   --lockfile artifacts/baselines/traps.json
 ```
 
