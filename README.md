@@ -31,10 +31,11 @@ Static multimodal benchmarks go stale the week they ship. Models memorize the se
 VisionEval is a **CI-native** evaluation stack for vision and VLMs:
 
 1. A **classification release gate** that fails the job on a new failure or an accuracy drop against a git-trackable baseline.
-2. A **four-pillar multimodal framework** (alignment, hallucination probes, robustness, models + dashboard).
-3. **Living traps**: every VLM hallucination becomes a durable SQLite test the model must beat *twice in a row* before it is retired.
+2. An **adaptive evaluation budget analyzer** (`visioneval budget-analyze`) that ranks samples without running the model, so eval spend goes to previous failures, high-risk tags, and low-confidence cases first.
+3. A **four-pillar multimodal framework** (alignment, hallucination probes, robustness, models + dashboard).
+4. **Living traps**: every VLM hallucination becomes a durable SQLite test the model must beat *twice in a row* before it is retired.
 
-The layers sit beside each other. `visioneval run` is still the classification blocker. Living traps never write classification tables.
+The layers sit beside each other. `visioneval run` is still the classification blocker. `visioneval budget-analyze` ranks the catalog first and does not call the model. Living traps never write classification tables.
 
 ---
 
@@ -44,7 +45,7 @@ Python 3.10+. From the repository root:
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate          # Windows: .\.venv\Scripts\Activate.ps1
+source .venv/bin/activate          # Windows: .\\.venv\\Scripts\\Activate.ps1
 python -m pip install -e ".[dev]"
 export PYTHONPATH="$(pwd)"         # Windows: $env:PYTHONPATH = (Get-Location).Path
 python -m pytest
@@ -62,14 +63,14 @@ visioneval budget-analyze demo_suite.yaml --json
 **Multimodal eval + living traps** (CPU, no GPU, no API keys)
 
 ```bash
-visioneval multimodal examples/multimodal/config.yaml \
+visioneval multimodal examples/multimodal/config.yaml \\
   --json-out reports/mm.json --markdown-out reports/mm.md
 
 visioneval traps list --db artifacts/traps.sqlite3
 visioneval traps harvest reports/multimodal.json --db artifacts/traps.sqlite3
-visioneval traps run --db artifacts/traps.sqlite3 \
+visioneval traps run --db artifacts/traps.sqlite3 \\
   --config examples/multimodal/config.yaml --budget 8
-visioneval traps update-baseline --db artifacts/traps.sqlite3 \
+visioneval traps update-baseline --db artifacts/traps.sqlite3 \\
   --lockfile artifacts/baselines/traps.json
 ```
 
@@ -195,11 +196,11 @@ Each one becomes a row in **`vlm_traps`** (same SQLite WAL pattern as classifica
 
 ```bash
 visioneval traps list --db artifacts/traps.sqlite3 --status open
-visioneval traps harvest reports/multimodal.json --db artifacts/traps.sqlite3 \
+visioneval traps harvest reports/multimodal.json --db artifacts/traps.sqlite3 \\
   --generate-hard-negatives --seed 0
-visioneval traps run --db artifacts/traps.sqlite3 \
+visioneval traps run --db artifacts/traps.sqlite3 \\
   --config examples/multimodal/config.yaml --budget 8 --retire-after 2
-visioneval traps update-baseline --db artifacts/traps.sqlite3 \
+visioneval traps update-baseline --db artifacts/traps.sqlite3 \\
   --lockfile artifacts/baselines/traps.json
 ```
 
@@ -363,7 +364,7 @@ Coverage: CLIP/BLIP math, POPE, corruptions, degradation, reports, VLM fakes/stu
 
 ## Roadmap
 
-**Present:** classification CI, four-pillar multimodal eval, living traps, Streamlit.
+**Present:** classification CI, adaptive evaluation budget, four-pillar multimodal eval, living traps, Streamlit.
 
 **Next:** deterministic process-pool execution for complete, non-fail-fast Phase 1 runs. Fail-fast stays sequential.
 
