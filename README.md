@@ -31,10 +31,11 @@ Static multimodal benchmarks go stale the week they ship. Models memorize the se
 VisionEval is a **CI-native** evaluation stack for vision and VLMs:
 
 1. A **classification release gate** that fails the job on a new failure or an accuracy drop against a git-trackable baseline.
-2. A **four-pillar multimodal framework** (alignment, hallucination probes, robustness, models + dashboard).
-3. **Living traps**: every VLM hallucination becomes a durable SQLite test the model must beat *twice in a row* before it is retired.
+2. An **adaptive evaluation budget analyzer** (`visioneval budget-analyze`) that ranks samples without running the model, so eval spend goes to previous failures, high-risk tags, and low-confidence cases first.
+3. A **four-pillar multimodal framework** (alignment, hallucination probes, robustness, models + dashboard).
+4. **Living traps**: every VLM hallucination becomes a durable SQLite test the model must beat *twice in a row* before it is retired.
 
-The layers sit beside each other. `visioneval run` is still the classification blocker. Living traps never write classification tables.
+The layers sit beside each other. `visioneval run` is still the classification blocker. `visioneval budget-analyze` ranks the catalog first and does not call the model. Living traps never write classification tables.
 
 ---
 
@@ -363,7 +364,7 @@ Coverage: CLIP/BLIP math, POPE, corruptions, degradation, reports, VLM fakes/stu
 
 ## Roadmap
 
-**Present:** classification CI, four-pillar multimodal eval, living traps, Streamlit.
+**Present:** classification CI, adaptive evaluation budget, four-pillar multimodal eval, living traps, Streamlit.
 
 **Next:** deterministic process-pool execution for complete, non-fail-fast Phase 1 runs. Fail-fast stays sequential.
 
