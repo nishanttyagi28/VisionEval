@@ -1,0 +1,15 @@
+# Example catalog for the classification suite. No images required.
+# Tags and confidence feed the attention sampler and budget analyzer.
+samples:
+  - {id: fail_a, label: cat, confidence: 0.92, tags: [regression]}
+  - {id: fail_b, label: cat, confidence: 0.88, tags: [regression]}
+  - {id: safety_one, label: cat, confidence: 0.91, tags: [safety_critical]}
+  - {id: safety_two, label: dog, confidence: 0.87, tags: [safety_critical, night]}
+  - {id: low_a, label: cat, confidence: 0.31}
+  - {id: low_b, label: dog, confidence: 0.22}
+  - {id: random_a, label: cat, confidence: 0.95}
+  - {id: random_b, label: dog, confidence: 0.93}
+  - {id: random_c, label: cat, confidence: 0.90}
+  - {id: random_d, label: dog, confidence: 0.89}
+  - {id: random_e, label: cat, confidence: 0.86}
+  - {id: random_f, label: dog, confidence: 0.84}
