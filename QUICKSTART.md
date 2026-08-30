@@ -110,6 +110,18 @@ Exit code `1`. Markdown lists **REGRESSION**, new-failure ids, and attention buc
 
 Restore `sample.label` in the adapter before the next baseline update.
 
+## Adaptive evaluation budget
+
+Rank the catalog and recommend how many samples to run. No adapter, no GPU, no API:
+
+```bash
+visioneval budget-analyze demo_suite.yaml
+visioneval budget-analyze demo_suite.yaml --json
+visioneval budget-analyze examples/classification_suite/suite.yaml --json
+```
+
+Human output lists total / previous-failure / high-risk / low-confidence counts, top-risk samples, the recommended budget, and the estimated reduction. `--json` emits the same fields as a mapping. Previous failures always run; remaining slots fill from highest risk until high-risk tags are represented and a small novelty slice is included.
+
 ---
 
 ## Multimodal eval layer

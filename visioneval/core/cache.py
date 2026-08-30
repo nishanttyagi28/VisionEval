@@ -48,6 +48,11 @@ class SQLiteCache:
         with self._connect() as connection:
             return {row[0] for row in connection.execute("SELECT sample_id FROM sample_outcomes WHERE fail_count > 0 AND consecutive_passes < ?", (_ATTENTION_RECOVERY_PASSES,))}
 
+    def known_sample_ids(self) -> set[str]:
+        """Return every sample_id that has an outcome row (pass or fail)."""
+        with self._connect() as connection:
+            return {row[0] for row in connection.execute("SELECT sample_id FROM sample_outcomes")}
+
     def get_prediction(self, cache_key: str) -> ClassificationPrediction | None:
         with self._connect() as connection:
             row = connection.execute("SELECT label, confidence FROM predictions WHERE cache_key = ?", (cache_key,)).fetchone()

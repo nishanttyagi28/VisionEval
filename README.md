@@ -55,6 +55,8 @@ python -m pytest
 ```bash
 visioneval run demo_suite.yaml --update-baseline
 visioneval run demo_suite.yaml          # exit 0 on PASS, 1 on REGRESSION
+visioneval budget-analyze demo_suite.yaml
+visioneval budget-analyze demo_suite.yaml --json
 ```
 
 **Multimodal eval + living traps** (CPU, no GPU, no API keys)
@@ -114,8 +116,8 @@ flowchart TB
 
 ```text
 visioneval/
-  cli.py                 visioneval run | multimodal | traps
-  core/                  suite, attention sampler, runner, cache, baseline
+  cli.py                 visioneval run | budget-analyze | multimodal | traps
+  core/                  suite, attention sampler, budget analyzer, runner, cache, baseline
   classification/        adapter loading, scoring, optional Torchvision / ONNX
   metrics/               CLIPScore, BLIP-Score, POPE, LLM-as-a-judge
   robustness/            gaussian noise, motion blur, contrast, occlusion
@@ -264,6 +266,7 @@ Redeploy from [share.streamlit.io/deploy](https://share.streamlit.io/deploy?repo
 
 ```text
 visioneval run SUITE [--update-baseline]
+visioneval budget-analyze SUITE [--json] [--top N] [--traps-db PATH]
 visioneval multimodal CONFIG [--json-out PATH] [--markdown-out PATH]
 visioneval traps list          [--db PATH] [--status open|retired|all]
 visioneval traps harvest REPORT [--db PATH] [--generate-hard-negatives] [--seed N]
@@ -277,6 +280,7 @@ visioneval traps update-baseline [--db PATH] [--lockfile PATH]
 | Command | Role |
 | --- | --- |
 | `visioneval run` | Classification release gate. Exit `1` on regression. |
+| `visioneval budget-analyze` | Deterministic risk ranking and recommended eval budget. No inference. |
 | `visioneval multimodal` | Four-pillar VLM eval. Does not fail the Phase 1 gate. |
 | `visioneval traps *` | Harvest, replay, and lock VLM hallucinations. |
 
@@ -299,6 +303,24 @@ Failure memory keeps `fail_count` and `consecutive_passes`. A sample stays in th
 
 `--update-baseline` writes a sorted JSON lockfile. Later runs compare only ids present in both selections, treat a disjoint selection as a regression, and fail if suite hash, model id, seed, or budget do not match. With `execution.fail_fast: true`, evaluation stops on the first **new** failure. Do not pass `--update-baseline` in CI.
 
+### Adaptive evaluation budget
+
+`visioneval budget-analyze` ranks the catalog **without running the model**. It reuses the same attention signals as the sampler: previous failures (classification SQLite, plus open living traps when that DB exists), suite `high_risk_tags`, low-confidence catalog scores, and novelty (never evaluated).
+
+```text
+risk_score = (previous_failure * 0.5) + (high_risk_tag * 0.2)
+           + (low_confidence * 0.2) + (novelty * 0.1)
+```
+
+Factors are 0 or 1. Weights are configurable (`RiskWeights`); those are the defaults. The recommended budget always includes previous failures, then fills from highest risk until every high-risk tag in the catalog is represented and a small novelty/random slice is included (default 15%, same idea as `random_coverage_fraction`). The suite `attention.budget` is a cap after previous failures.
+
+```bash
+visioneval budget-analyze demo_suite.yaml
+visioneval budget-analyze examples/classification_suite/suite.yaml --json
+```
+
+CPU-only. See [docs/BUDGET.md](docs/BUDGET.md).
+
 ---
 
 ## Install extras
@@ -316,13 +338,13 @@ A laptop without a GPU can `import visioneval` and run the fake/mock stack. Hugg
 
 ## How the layers compose
 
-| Concern | `visioneval run` | `visioneval multimodal` | `visioneval traps` |
-| --- | --- | --- | --- |
-| Task | Image classification | Captioning / VQA / VLM comparison | Persistent hallucination tests |
-| Gate | Baseline lockfile, exit 1 | Report scores | Trap lockfile, exit 1 on `--check-baseline` |
-| Memory | `sample_outcomes` / `predictions` | None by default | `vlm_traps` |
-| Sampling | Attention budget | Explicit sample list | Open traps first |
-| CI | pytest covers all three; mocks keep it CPU-only | same | same |
+| Concern | `visioneval run` | `visioneval budget-analyze` | `visioneval multimodal` | `visioneval traps` |
+| --- | --- | --- | --- | --- |
+| Task | Image classification | Rank catalog, recommend a run budget | Captioning / VQA / VLM comparison | Persistent hallucination tests |
+| Gate | Baseline lockfile, exit 1 | Report only (no inference) | Report scores | Trap lockfile, exit 1 on `--check-baseline` |
+| Memory | `sample_outcomes` / `predictions` | Reads cache + optional `vlm_traps` | None by default | `vlm_traps` |
+| Sampling | Attention budget | Coverage floor over risk scores | Explicit sample list | Open traps first |
+| CI | pytest covers all four; mocks keep it CPU-only | same | same | same |
 
 Use the classification harness as the vision release blocker. Use the multimodal layer to compare VLMs. Use living traps so yesterday's hallucination is tomorrow's regression test.
 
@@ -335,7 +357,7 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
-Coverage: CLIP/BLIP math, POPE, corruptions, degradation, reports, VLM fakes/stubs, profiling, multimodal pipeline, traps (harvest / retire / hard-negatives / sqlite isolation). Tests never download HuggingFace weights or call paid APIs.
+Coverage: CLIP/BLIP math, POPE, corruptions, degradation, reports, VLM fakes/stubs, profiling, multimodal pipeline, traps (harvest / retire / hard-negatives / sqlite isolation), budget analyzer (risk score / ordering / recommendation / CLI). Tests never download HuggingFace weights or call paid APIs.
 
 ---
 
