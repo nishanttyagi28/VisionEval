@@ -1,82 +1,161 @@
 # VisionEval
 
-**Catch vision-model regressions and hallucinations before they ship — in CI, not in a slide deck.**
+An open-source tool for finding and preventing repeated mistakes in vision and multimodal AI models.
 
 [![CI](https://github.com/nishanttyagi28/VisionEval/actions/workflows/ci.yml/badge.svg)](https://github.com/nishanttyagi28/VisionEval/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-visioneval.streamlit.app-FF4B4B?logo=streamlit&logoColor=white)](https://visioneval.streamlit.app)
 
-**[Try the live demo →](https://visioneval.streamlit.app)** · no login · CPU-only fake models
+AI models can look fine when you only watch the overall score. A model can still keep making the same mistake on the same kind of image — saying something is there when it isn’t, or missing something that is.
+
+Those mistakes are easy to forget. You fix one, the suite moves on, and a few weeks later the same failure shows up again. VisionEval is a small toolkit I built so those failures stick around as tests, get re-checked, and can stop a bad change before it lands.
+
+**[Live demo](https://visioneval.streamlit.app)** — side-by-side captions and scores, no login, runs on CPU with fake models (no API key).
 
 ---
 
-## The problem
+## In simple terms
 
-Static vision / VLM benchmarks go stale. Models memorize the set. A flaky hallucination that bit you last week never shows up on the next leaderboard cut. Teams need a **release gate** that fails the PR — and a memory of failures that does not reset every run.
+If someone asks “what does this actually do?”, here is the short version.
 
-## What VisionEval does
+**1. It remembers mistakes.**
+Suppose a model says there is a cat in an image when there isn’t one. VisionEval can turn that into a lasting test and ask the model again later. The test stays open until the model gets it right twice in a row.
 
-| Feature | In plain English | Why it matters |
-| --- | --- | --- |
-| **Classification release gate** | `visioneval run` compares this run to a git-trackable baseline and exits `1` on a new failure or accuracy drop. | Same habit as unit tests: regressions block merge instead of showing up in chat. |
-| **Living traps + CI gate** | Hallucinations become durable SQLite tests. They retire only after **two consecutive passes**. `visioneval traps gate` fails CI on `new_open` / `reappeared` / `worse`. | Intermittent “yes, there is a cat” bugs stay in the suite until the model actually beats them. |
-| **Failure maps** | `visioneval maps` builds a CPU-only map of *where* the model fails — by object, probe type, sample, and metric. | Debugging “it hallucinates sometimes” becomes “it fails POPE on *absent* objects in these samples.” |
-| **Budget-aware eval** | `visioneval budget-analyze` ranks samples with no model call; `visioneval run --use-budget` evaluates that recommended subset. | Spend GPU/API budget on previous failures and high-risk tags first. Reduction is **per-run** (`estimated_reduction`) — not a fixed marketing percentage. |
-| **Multimodal layer** | Alignment (CLIP/BLIP), POPE + LLM-judge probes, image corruptions, VLM adapters, Streamlit dashboard. | One repo covers classification CI and VLM hallucination / robustness work without a second toolchain. |
+**2. It shows where the model is struggling.**
+Instead of only “accuracy went down,” you can see clusters: which objects, which samples, which kinds of checks failed.
 
-## What this improves
+**3. It avoids testing everything when the risky examples matter more.**
+You can rank samples by risk (past failures, tagged high-risk cases, low-confidence rows, new ones) and run that smaller set first. The gate still works the same way — you just spend less time on the easy stuff.
 
-Evidence from this repo only — no invented speed or cost claims.
+---
 
-| Fact | Value |
+## What I built
+
+### Stops a quiet regression from getting merged
+
+`visioneval run` compares this run to a baseline you saved in git. If a new failure shows up, or accuracy on the locked set drops, the command exits with code `1` — the same idea as a failing unit test.
+
+```bash
+visioneval run demo_suite.yaml --update-baseline   # promote once, when it looks right
+visioneval run demo_suite.yaml                    # later: exit 0 pass, exit 1 regression
+```
+
+**Why it helps:** You don’t have to notice a bad vision change by eye in a PR review.
+
+### Remembers mistakes the model has already made
+
+After a multimodal run, VisionEval can harvest failures (wrong yes/no answers, weak judge scores, captions that miss expected objects) into a local SQLite store. Those “traps” get replayed. They only retire after **two consecutive passes**. `visioneval traps gate` fails CI if an old trap comes back or gets worse.
+
+```bash
+visioneval traps harvest reports/mm.json --db artifacts/traps.sqlite3
+visioneval traps update-baseline --db artifacts/traps.sqlite3 \
+  --lockfile artifacts/baselines/traps.json
+visioneval traps gate --db artifacts/traps.sqlite3 \
+  --lockfile artifacts/baselines/traps.json --json
+```
+
+**Why it helps:** A bug you already fixed is less likely to sneak back unnoticed.
+
+### Shows where the model keeps going wrong
+
+`visioneval maps` reads a report (and optionally the traps database) and builds a simple map of failures — by object, sample, and failure type. No model call. CPU only.
+
+```bash
+visioneval maps reports/mm.json --json
+visioneval maps reports/mm.json --db artifacts/traps.sqlite3 --json
+```
+
+**Why it helps:** Debugging gets more specific than “it hallucinates sometimes.”
+
+### Tests the risky examples first
+
+`visioneval budget-analyze` ranks the catalog without running the model. `visioneval run --use-budget` then evaluates that recommended subset. Previous failures always stay in. How much smaller the set is depends on *your* data that run — the tool prints an `estimated_reduction` figure; there is no fixed “we cut X%” claim in this repo.
+
+```bash
+visioneval budget-analyze demo_suite.yaml --json
+visioneval run demo_suite.yaml --use-budget
+```
+
+**Why it helps:** Less time and compute on samples that rarely catch regressions.
+
+### Compares multimodal models in one place
+
+CLIP/BLIP-style alignment scores, yes/no hallucination probes, a simple judge, image corruptions (noise, blur, contrast, occlusion), and a Streamlit UI. Fake models work offline so you can try the loop without a GPU.
+
+```bash
+visioneval multimodal examples/multimodal/config.yaml \
+  --json-out reports/mm.json --markdown-out reports/mm.md
+```
+
+**Why it helps:** Classification CI and VLM checks live in the same project instead of a pile of notebooks.
+
+---
+
+## A few numbers
+
+Only things I can point to in this repository:
+
+| | |
 | --- | --- |
-| Automated tests | **100** pytest cases across **23** test modules |
-| Top-level CLI | `run`, `budget-analyze`, `multimodal`, `maps`, `traps` |
+| Automated tests | **100** pytest cases in **23** modules |
+| Main CLI commands | `run`, `budget-analyze`, `multimodal`, `maps`, `traps` |
 | Traps subcommands | `list`, `harvest`, `run`, `update-baseline`, `gate` |
-| Hallucination probe types harvested | `pope`, `judge`, `caption` |
-| Map metrics | `pope_miss`, `judge_flag`, `caption_mismatch` |
-| Trap retirement rule | `--retire-after` default **2** consecutive passes |
-| Python | **3.10+** |
-| License | **Apache-2.0** |
-| Version | **0.1.0** (actively developed) |
-| Demo fixtures | 3-sample classification demo; 2 multimodal scenes (`red_square`, `blue_circle`); 12-sample classification example catalog |
-| CI | GitHub Actions `test` job — Ubuntu, Python 3.10, `pytest` |
-| Optional extras | `dev`, `hf`, `api`, `ui`, `metrics`, `all` |
-| Robustness corruptions | gaussian noise, motion blur, contrast jitter, occlusion |
+| Failure types harvested | 3 (`pope`, `judge`, `caption`) |
+| Map metrics | 3 (`pope_miss`, `judge_flag`, `caption_mismatch`) |
+| Trap retire rule | default **2** consecutive passes |
+| Robustness corruptions | 4 (gaussian noise, motion blur, contrast, occlusion) |
+| Demo fixtures | 3-sample classification demo; 2 multimodal scenes; 12-sample example catalog |
+| Python | 3.10+ |
+| License | Apache-2.0 |
+| Version | 0.1.0 |
+| CI | one GitHub Actions job: Ubuntu, Python 3.10, pytest |
+| Live demo | CPU-only fake models, no API key |
 
-## Why this is useful
+I am not claiming a fixed cost saving or speedup. Budget reduction is calculated per run from your suite.
 
-If you ship a vision or VLM change, you want two things: (1) a **hard gate** that fails CI when quality drops, and (2) a **memory** of the specific hallucinations that bit you. VisionEval is built for that workflow — baselines and trap lockfiles are git-trackable; reports are Markdown + JSON; the demo runs without GPUs or API keys.
+---
+
+## Why this matters
+
+The useful part isn’t another score on a dashboard. It’s knowing that a mistake you fixed last week didn’t quietly come back this week — and having a boring, repeatable check for that before you release.
+
+It also makes investigation less vague (“where does it fail?”) and lets you spend evaluation effort on the examples that already burned you, instead of always running the whole pile.
+
+---
 
 ## How it works
 
-**Simple flow**
-
-1. Define a suite / eval YAML and a model adapter (or use the FakeVLM demo).
-2. Run classification (`visioneval run`) and/or multimodal (`visioneval multimodal`).
-3. Promote a baseline / trap lockfile when outcomes look right.
-4. On every PR: re-run and fail on regression (`run` / `traps gate`).
-5. Optionally: budget-analyze → `--use-budget`, harvest traps, inspect `maps`.
-
-**Optional architecture** (for engineers)
-
 ```text
-visioneval run            → attention / budget select → adapter → SQLite → baseline lock → exit 0/1
-visioneval multimodal     → metrics + corruptions + profiling → Markdown/JSON
-visioneval traps harvest  → POPE / judge / caption failures → vlm_traps (separate tables)
-visioneval traps gate     → compare DB to lockfile → exit 1 on new_open / reappeared / worse
-visioneval maps           → CPU-only locus map from report and/or open traps (read-only)
-visioneval budget-analyze → risk rank, no inference → feeds run --use-budget
+Model
+  ↓
+Test examples
+  ↓
+Find mistakes
+  ↓
+Remember the important ones
+  ↓
+Test them again
+  ↓
+Block regressions (exit 1)
 ```
 
-Layers sit beside each other. Living traps and maps never write classification tables.
+For engineers, the pieces look like this:
+
+```text
+visioneval run            → select samples → adapter → SQLite → baseline lock → exit 0/1
+visioneval multimodal     → metrics + corruptions + profiling → Markdown/JSON
+visioneval traps harvest  → failures → vlm_traps (separate tables from classification)
+visioneval traps gate     → compare DB to lockfile → exit 1 on new_open / reappeared / worse
+visioneval maps           → CPU-only map from report and/or open traps (read-only)
+visioneval budget-analyze → risk rank, no inference → optional input to run --use-budget
+```
+
+Living traps and maps do not write into the classification tables. Layers sit beside each other.
 
 ---
 
 ## Install
-
-Python 3.10+. From the repository root:
 
 ```bash
 python -m venv .venv
@@ -86,13 +165,15 @@ export PYTHONPATH="$(pwd)"         # Windows: $env:PYTHONPATH = (Get-Location).P
 python -m pytest
 ```
 
-Real VLMs / CLIP / paid judge / dashboard:
+Optional stacks:
 
 ```bash
-python -m pip install -e ".[hf,api,ui]"
+python -m pip install -e ".[hf,api,ui]"     # real VLMs, OpenAI-compatible APIs, Streamlit
+python -m pip install -e ".[metrics]"      # real CLIP/BLIP (pulls torch)
+python -m pip install -e ".[all]"
 ```
 
-API keys come from the environment (`OPENAI_API_KEY` by default). Do not commit secrets.
+API keys stay in the environment (`OPENAI_API_KEY` by default). Don’t commit secrets.
 
 ## CLI
 
@@ -104,14 +185,6 @@ visioneval maps [REPORT] [--json] [--db PATH]
 visioneval traps list|harvest|run|gate|update-baseline
 ```
 
-| Command | Role |
-| --- | --- |
-| `visioneval run` | Classification release gate. `--use-budget` evaluates the budget-analyzer subset. |
-| `visioneval budget-analyze` | Deterministic risk ranking. No inference. |
-| `visioneval multimodal` | Alignment, POPE, judge, robustness, profiling, reports. |
-| `visioneval maps` | Black-box hallucination map (CPU-only). |
-| `visioneval traps gate` | Visual red-team CI blocker (`new_open` / `reappeared` / `worse`). |
-
 ## Quick start
 
 ```bash
@@ -121,7 +194,7 @@ visioneval run demo_suite.yaml
 visioneval budget-analyze demo_suite.yaml --json
 visioneval run demo_suite.yaml --use-budget
 
-# Multimodal + living traps + maps (CPU, no GPU, no API keys)
+# Multimodal + traps + maps (CPU, no GPU, no API keys)
 visioneval multimodal examples/multimodal/config.yaml \
   --json-out reports/mm.json --markdown-out reports/mm.md
 visioneval traps harvest reports/mm.json --db artifacts/traps.sqlite3
@@ -134,33 +207,9 @@ visioneval traps gate --db artifacts/traps.sqlite3 \
 visioneval maps reports/mm.json --json
 ```
 
-Full walkthrough: [QUICKSTART.md](QUICKSTART.md). Also: [docs/BUDGET.md](docs/BUDGET.md), [docs/MULTIMODAL.md](docs/MULTIMODAL.md), [docs/MAPS.md](docs/MAPS.md), [DEMO_GUIDE.md](DEMO_GUIDE.md).
+More detail: [QUICKSTART.md](QUICKSTART.md), [docs/BUDGET.md](docs/BUDGET.md), [docs/MULTIMODAL.md](docs/MULTIMODAL.md), [docs/MAPS.md](docs/MAPS.md), [DEMO_GUIDE.md](DEMO_GUIDE.md).
 
-### Living traps
-
-Opt-in SQLite memory for VLM hallucinations. Default retire rule: **two consecutive passes**. Open traps consume replay budget first. Does not replace `visioneval run`.
-
-### Failure maps
-
-```bash
-visioneval maps reports/mm.json
-visioneval maps reports/mm.json --db artifacts/traps.sqlite3 --json
-visioneval maps --db artifacts/traps.sqlite3
-```
-
-Read-only. Harvest still owns persistence.
-
-### Budget-aware runs
-
-```bash
-visioneval budget-analyze demo_suite.yaml --json
-visioneval run demo_suite.yaml --use-budget
-# or attention.use_budget: true in suite YAML
-```
-
-`estimated_reduction` is computed **per run** from `recommended / total`. Do not treat any single percentage as a product claim.
-
-### Multimodal + dashboard
+### Multimodal dashboard
 
 ```bash
 python -m pip install -e ".[ui]"
@@ -178,20 +227,18 @@ python -m pytest
 
 ## Example workflow
 
-**Plain English:** lock a good classification baseline, run the gate on every change, optionally spend less budget on low-risk samples, then for VLMs harvest hallucinations into traps and fail CI if they get worse.
+1. Lock a baseline when the classification results look right.
+2. On every change, run the gate.
+3. Optionally rank samples and evaluate the riskier subset.
+4. For VLMs, harvest failures into traps, promote a lockfile, fail CI if they return.
+5. Open a map when you want to see where failures cluster.
 
 ```bash
-# 1) Promote a known-good classification baseline
 visioneval run demo_suite.yaml --update-baseline
-
-# 2) CI-style check (exit 0 = PASS, 1 = REGRESSION)
 visioneval run demo_suite.yaml
-
-# 3) Optional: rank risk, then evaluate the recommended subset
 visioneval budget-analyze demo_suite.yaml --json
 visioneval run demo_suite.yaml --use-budget
 
-# 4) Multimodal report → living traps → lockfile → gate
 visioneval multimodal examples/multimodal/config.yaml \
   --json-out reports/mm.json --markdown-out reports/mm.md
 visioneval traps harvest reports/mm.json --db artifacts/traps.sqlite3
@@ -201,8 +248,6 @@ visioneval traps update-baseline --db artifacts/traps.sqlite3 \
   --lockfile artifacts/baselines/traps.json
 visioneval traps gate --db artifacts/traps.sqlite3 \
   --lockfile artifacts/baselines/traps.json --json
-
-# 5) See where failures cluster
 visioneval maps reports/mm.json --json
 ```
 
@@ -210,7 +255,9 @@ visioneval maps reports/mm.json --json
 
 ## Demo
 
-Live: **[visioneval.streamlit.app](https://visioneval.streamlit.app)**
+**Live:** [https://visioneval.streamlit.app](https://visioneval.streamlit.app)
+
+You can compare two fake models on simple shapes, look at scores, and export Markdown/JSON. It runs on CPU and does not ask for an API key.
 
 <p align="center">
   <img src="docs/assets/streamlit-red-square.svg" alt="Side-by-side VLM comparison on red_square" width="410">
@@ -218,29 +265,19 @@ Live: **[visioneval.streamlit.app](https://visioneval.streamlit.app)**
   <img src="docs/assets/streamlit-blue-circle.svg" alt="Metric radar and Markdown/JSON export on blue_circle" width="410">
 </p>
 
-<p align="center">
-  <sub>
-    Left: <code>red_square</code> — fake-left names the square, fake-right stays generic.
-    Right: <code>blue_circle</code> — metric radar and export.
-  </sub>
-</p>
+---
 
-Local:
+## Why I built this
 
-```bash
-python -m pip install -e ".[ui]"
-streamlit run app/streamlit_app.py
-```
+I kept seeing model evaluation reduced to a score, while the individual mistakes were easy to forget. I wanted a small tool that could remember those failures and make them part of the normal development loop — closer to unit tests than to a one-off notebook.
 
 ---
 
 ## Status
 
-**WIP · v0.1.0 · actively developed.** Useful today for demos, CI experiments, and local VLM eval loops. Not claiming production-hardened multi-tenant SaaS. APIs and suite schemas may still move; pin a commit if you depend on behavior.
+**WIP · v0.1.0 · actively developed.**
 
-## Why I built this
-
-I kept hitting the same gap: vision quality lived in notebooks and one-off scripts, while the rest of the stack had real CI. Intermittent VLM hallucinations were especially annoying — fixed once, gone from the suite, back next week. VisionEval is my attempt to make regression gates and failure memory as boring and reliable as unit tests, starting from a small builder’s toolkit rather than a platform pitch.
+Useful today for demos, experiments, and local CI-style checks. Schemas and APIs may still move. Pin a commit if you depend on specific behavior. I’m not calling this a finished product.
 
 ## License
 
