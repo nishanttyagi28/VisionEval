@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -11,6 +12,11 @@ from visioneval.cli import app
 from visioneval.maps.hallucination import build_map, events_from_report, to_json
 from visioneval.traps.harvest import harvest_report
 from visioneval.traps.store import TrapStore
+
+
+def _cli_text(result) -> str:
+    raw = getattr(result, "stdout", None) or result.output or ""
+    return re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", raw)
 
 
 def _pope_row(*, correct_present: bool = False) -> dict:
@@ -96,8 +102,8 @@ def test_maps_cli_json(tmp_path: Path) -> None:
     report = tmp_path / "mm.json"
     report.write_text(json.dumps({"samples": [_pope_row()]}), encoding="utf-8")
     result = CliRunner().invoke(app, ["maps", str(report), "--json"])
-    assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    assert result.exit_code == 0, _cli_text(result)
+    payload = json.loads(_cli_text(result))
     assert payload["total"] >= 1
     assert "by_metric" in payload
     assert "pope_miss" in payload["by_metric"]
