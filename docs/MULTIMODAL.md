@@ -16,6 +16,7 @@ It does **not** replace attention sampling, SQLite failure memory, or baseline l
 | `visioneval.report` | Markdown + JSON for multimodal runs (separate from `visioneval.core.report`) |
 | `visioneval.multimodal` | Pydantic YAML config + pipeline |
 | `visioneval.traps` | Living hallucination traps: store, harvest, replay, hard-negatives, lockfile |
+| `visioneval.maps` | Black-box hallucination maps (CPU-only locus analysis) |
 | `app/streamlit_app.py` | Side-by-side comparison, radar charts, export, open-trap panel |
 
 ## Swappable backends
@@ -51,3 +52,38 @@ visioneval traps update-baseline --db artifacts/traps.sqlite3 --lockfile artifac
 ```
 
 `fake-sparse` answers `A shape.` and typically harvests caption + judge traps. Open traps consume replay budget before seeded hard-negative POPE variants. A retired trap that reappears, or an open trap whose `fail_count` grows, is a lockfile regression.
+
+## Visual red-team CI gate
+
+Treat living traps like `visioneval run`: deterministic lockfile, exit `1` on regression.
+
+```bash
+# After a multimodal report exists:
+visioneval traps harvest reports/mm.json --db artifacts/traps.sqlite3
+visioneval traps run --db artifacts/traps.sqlite3 \
+  --config examples/multimodal/config.yaml --budget 8
+# Promote once: commit the lockfile
+visioneval traps update-baseline --db artifacts/traps.sqlite3 \
+  --lockfile artifacts/baselines/traps.json
+
+# CI (every PR / release):
+visioneval traps harvest reports/mm.json --db artifacts/traps.sqlite3
+visioneval traps run --db artifacts/traps.sqlite3 \
+  --config examples/multimodal/config.yaml --budget 8 \
+  --check-baseline artifacts/baselines/traps.json --json
+# Or pure compare after harvest/run (no inference):
+visioneval traps gate --db artifacts/traps.sqlite3 \
+  --lockfile artifacts/baselines/traps.json --json
+```
+
+Machine-actionable regressions (`--json`):
+
+| Field | Meaning |
+| --- | --- |
+| `new_open` | Open traps not present in the lockfile |
+| `reappeared` | Trap was retired in the lockfile but is open again |
+| `worse` | Locked open trap with higher `fail_count` or pass→fail |
+| `still_open` | Every currently open trap id |
+| `recovered` | Locked open trap now retired (informational) |
+
+Do **not** pass `update-baseline` in CI. Classification `visioneval run` is unchanged.

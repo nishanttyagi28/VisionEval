@@ -29,6 +29,7 @@ class AttentionConfig(BaseModel):
     high_risk_fraction: float = Field(default=0.30, ge=0.0, le=1.0)
     low_confidence_fraction: float = Field(default=0.15, ge=0.0, le=1.0)
     random_coverage_fraction: float = Field(default=0.15, ge=0.0, le=1.0)
+    use_budget: bool = False
 
     @model_validator(mode="after")
     def fractions_match_budget(self) -> "AttentionConfig":

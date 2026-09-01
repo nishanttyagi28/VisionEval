@@ -56,3 +56,16 @@ Human and JSON both report:
 JSON also includes `recommended_sample_ids`, per-sample factors, weights, and policy.
 
 Optional flags: `--top N` (default 10), `--traps-db PATH` (default `artifacts/traps.sqlite3` when that file exists).
+
+## Wire into `visioneval run`
+
+CI can evaluate the recommended risk subset instead of the attention-fraction sampler:
+
+```bash
+visioneval run demo_suite.yaml --use-budget
+visioneval run demo_suite.yaml --use-budget --traps-db artifacts/traps.sqlite3
+```
+
+Or set `attention.use_budget: true` in the suite YAML. Default behavior is unchanged when the flag/option is off.
+
+Selection order matches `recommended_sample_ids` from `budget-analyze` (previous failures first, then risk ranking / coverage floor). Each selected sample gets a `selection_reason` from its highest risk factor.

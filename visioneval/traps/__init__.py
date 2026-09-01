@@ -3,8 +3,10 @@
 from visioneval.traps.baseline import (
     TrapRegression,
     compare_trap_baseline,
+    format_trap_regression,
     load_trap_baseline,
     save_trap_baseline,
+    trap_regression_json,
 )
 from visioneval.traps.generator import generate_hard_negative, mint_hard_negatives
 from visioneval.traps.harvest import HarvestSummary, harvest_report
@@ -19,10 +21,12 @@ __all__ = [
     "TrapRunResult",
     "TrapStore",
     "compare_trap_baseline",
+    "format_trap_regression",
     "generate_hard_negative",
     "harvest_report",
     "load_trap_baseline",
     "mint_hard_negatives",
     "run_open_traps",
     "save_trap_baseline",
+    "trap_regression_json",
 ]
