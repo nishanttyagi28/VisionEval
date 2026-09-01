@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -14,6 +15,11 @@ from visioneval.traps.baseline import (
 )
 from visioneval.traps.harvest import harvest_report
 from visioneval.traps.store import TrapStore
+
+
+def _cli_text(result) -> str:
+    raw = getattr(result, "stdout", None) or result.output or ""
+    return re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", raw)
 
 
 def _pope_row(*, correct_present: bool = False) -> dict:
@@ -116,14 +122,14 @@ def test_traps_gate_cli_exit_codes(tmp_path: Path) -> None:
     store = TrapStore(db)
     save_trap_baseline(lock, store)
     ok = CliRunner().invoke(app, ["traps", "gate", "--db", str(db), "--lockfile", str(lock), "--json"])
-    assert ok.exit_code == 0, ok.output
-    payload = json.loads(ok.output)
+    assert ok.exit_code == 0, _cli_text(ok)
+    payload = json.loads(_cli_text(ok))
     assert payload["is_regression"] is False
 
     harvest_report({"samples": [_pope_row()]}, store)
     bad = CliRunner().invoke(app, ["traps", "gate", "--db", str(db), "--lockfile", str(lock), "--json"])
-    assert bad.exit_code == 1, bad.output
-    body = json.loads(bad.output)
+    assert bad.exit_code == 1, _cli_text(bad)
+    body = json.loads(_cli_text(bad))
     assert body["is_regression"] is True
     assert body["new_open"]
 
@@ -138,5 +144,5 @@ def test_traps_run_check_baseline_emits_gate(tmp_path: Path) -> None:
         app,
         ["traps", "run", "--db", str(db), "--budget", "8", "--check-baseline", str(lock), "--json"],
     )
-    assert "Traps run:" in result.output
-    assert "is_regression" in result.output
+    assert "Traps run:" in _cli_text(result)
+    assert "is_regression" in _cli_text(result)
