@@ -122,6 +122,15 @@ visioneval budget-analyze examples/classification_suite/suite.yaml --json
 
 Human output lists total / previous-failure / high-risk / low-confidence counts, top-risk samples, the recommended budget, and the estimated reduction. `--json` emits the same fields as a mapping. Previous failures always run; remaining slots fill from highest risk until high-risk tags are represented and a small novelty slice is included.
 
+Wire the recommendation into a classification run:
+
+```bash
+visioneval run demo_suite.yaml --use-budget
+visioneval run demo_suite.yaml --use-budget --traps-db artifacts/traps.sqlite3
+```
+
+Or set `attention.use_budget: true` in the suite YAML. Default behavior is unchanged when off.
+
 ---
 
 ## Multimodal eval layer
@@ -135,10 +144,14 @@ visioneval multimodal examples/multimodal/config.yaml \
 visioneval traps list --db artifacts/traps.sqlite3
 visioneval traps harvest reports/mm.json --db artifacts/traps.sqlite3
 visioneval traps run --db artifacts/traps.sqlite3 --config examples/multimodal/config.yaml --budget 8
+visioneval traps update-baseline --db artifacts/traps.sqlite3 --lockfile artifacts/baselines/traps.json
+# CI every PR:
+visioneval traps gate --db artifacts/traps.sqlite3 --lockfile artifacts/baselines/traps.json --json
+visioneval maps reports/mm.json --json
 python -m pytest
 ```
 
-Living traps are opt-in SQLite memory for VLM hallucinations (POPE misses, judge flags, caption/object mismatches). They retire after two consecutive passes and do not replace `visioneval run`.
+Living traps are opt-in SQLite memory for VLM hallucinations (POPE misses, judge flags, caption/object mismatches). They retire after two consecutive passes and do not replace `visioneval run`. `visioneval traps gate` is the visual red-team CI blocker (exit `1` on `new_open` / `reappeared` / `worse`). `visioneval maps` builds a CPU-only black-box map of where the model consistently fails.
 
 Dashboard (optional extra):
 
