@@ -1,126 +1,111 @@
 # VisionEval
 
-An open-source tool for finding and preventing repeated mistakes in vision and multimodal AI models.
+An open-source tool for testing vision AI models and making sure old mistakes don’t quietly come back.
 
 [![CI](https://github.com/nishanttyagi28/VisionEval/actions/workflows/ci.yml/badge.svg)](https://github.com/nishanttyagi28/VisionEval/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-visioneval.streamlit.app-FF4B4B?logo=streamlit&logoColor=white)](https://visioneval.streamlit.app)
 
-AI models can look fine when you only watch the overall score. A model can still keep making the same mistake on the same kind of image — saying something is there when it isn’t, or missing something that is.
+People often judge an AI model by one overall score.
 
-Those mistakes are easy to forget. You fix one, the suite moves on, and a few weeks later the same failure shows up again. VisionEval is a small toolkit I built so those failures stick around as tests, get re-checked, and can stop a bad change before it lands.
+That score can go up even while the model keeps failing the same important images. A wrong answer gets fixed once, then slips out of the test set, and a few weeks later it shows up again.
 
-**[Live demo](https://visioneval.streamlit.app)** — side-by-side captions and scores, no login, runs on CPU with fake models (no API key).
+VisionEval is a small toolkit I built to keep those failures around, check them again, and catch them before a new version goes out.
+
+**[Try the live demo](https://visioneval.streamlit.app)** — compare models on simple images in the browser. No login. Runs on a normal computer without a paid API key.
 
 ---
 
 ## In simple terms
 
-If someone asks “what does this actually do?”, here is the short version.
+If a recruiter asks “so what does this project actually do?”, here’s how I’d answer.
 
-**1. It remembers mistakes.**
-Suppose a model says there is a cat in an image when there isn’t one. VisionEval can turn that into a lasting test and ask the model again later. The test stays open until the model gets it right twice in a row.
+Imagine a model looks at a photo and says there is a cat when there isn’t one.
 
-**2. It shows where the model is struggling.**
-Instead of only “accuracy went down,” you can see clusters: which objects, which samples, which kinds of checks failed.
+VisionEval can remember that mistake and ask the same question again later. If the model fails again, you see it. If a new version brings the mistake back after you thought it was fixed, you see that too.
 
-**3. It avoids testing everything when the risky examples matter more.**
-You can rank samples by risk (past failures, tagged high-risk cases, low-confidence rows, new ones) and run that smaller set first. The gate still works the same way — you just spend less time on the easy stuff.
+It can also show *where* the model is struggling — which kinds of images or objects keep going wrong — instead of only telling you that “the score changed.”
+
+And when you don’t want to re-test every image every time, it can focus first on the examples that already caused trouble.
+
+That’s the whole idea: remember, re-check, don’t rely on a single number.
 
 ---
 
 ## What I built
 
-### Stops a quiet regression from getting merged
+### Remembers past mistakes
 
-`visioneval run` compares this run to a baseline you saved in git. If a new failure shows up, or accuracy on the locked set drops, the command exits with code `1` — the same idea as a failing unit test.
-
-```bash
-visioneval run demo_suite.yaml --update-baseline   # promote once, when it looks right
-visioneval run demo_suite.yaml                    # later: exit 0 pass, exit 1 regression
-```
-
-**Why it helps:** You don’t have to notice a bad vision change by eye in a PR review.
-
-### Remembers mistakes the model has already made
-
-After a multimodal run, VisionEval can harvest failures (wrong yes/no answers, weak judge scores, captions that miss expected objects) into a local SQLite store. Those “traps” get replayed. They only retire after **two consecutive passes**. `visioneval traps gate` fails CI if an old trap comes back or gets worse.
+When the model gets something wrong, VisionEval can turn that into a lasting check and run it again on later versions. The check stays until the model gets it right twice in a row.
 
 ```bash
 visioneval traps harvest reports/mm.json --db artifacts/traps.sqlite3
-visioneval traps update-baseline --db artifacts/traps.sqlite3 \
-  --lockfile artifacts/baselines/traps.json
 visioneval traps gate --db artifacts/traps.sqlite3 \
   --lockfile artifacts/baselines/traps.json --json
 ```
 
-**Why it helps:** A bug you already fixed is less likely to sneak back unnoticed.
+**Why it helps:** A bug you already fixed is less likely to return unnoticed.
 
-### Shows where the model keeps going wrong
+### Shows where the model struggles
 
-`visioneval maps` reads a report (and optionally the traps database) and builds a simple map of failures — by object, sample, and failure type. No model call. CPU only.
+Instead of only “accuracy went down,” you get a simple map of failures — which samples and which kinds of mistakes keep showing up.
 
 ```bash
 visioneval maps reports/mm.json --json
-visioneval maps reports/mm.json --db artifacts/traps.sqlite3 --json
 ```
 
-**Why it helps:** Debugging gets more specific than “it hallucinates sometimes.”
+**Why it helps:** You can investigate a pattern, not just a number.
 
-### Tests the risky examples first
+### Tests risky examples first
 
-`visioneval budget-analyze` ranks the catalog without running the model. `visioneval run --use-budget` then evaluates that recommended subset. Previous failures always stay in. How much smaller the set is depends on *your* data that run — the tool prints an `estimated_reduction` figure; there is no fixed “we cut X%” claim in this repo.
+You can rank examples by how risky they look (past failures, tagged important cases, uncertain ones, new ones) and test that smaller set first. How much smaller depends on your data that day — the tool reports it per run; I’m not claiming a fixed savings percentage.
 
 ```bash
 visioneval budget-analyze demo_suite.yaml --json
 visioneval run demo_suite.yaml --use-budget
 ```
 
-**Why it helps:** Less time and compute on samples that rarely catch regressions.
+**Why it helps:** Less time spent re-checking easy examples that rarely catch problems.
 
-### Compares multimodal models in one place
+### Works with automated checks
 
-CLIP/BLIP-style alignment scores, yes/no hallucination probes, a simple judge, image corruptions (noise, blur, contrast, occlusion), and a Streamlit UI. Fake models work offline so you can try the loop without a GPU.
+You can save a known-good result, then re-run on every change. If new failures appear or quality drops on the same locked set, the command fails the same way a normal test would.
 
 ```bash
-visioneval multimodal examples/multimodal/config.yaml \
-  --json-out reports/mm.json --markdown-out reports/mm.md
+visioneval run demo_suite.yaml --update-baseline
+visioneval run demo_suite.yaml
 ```
 
-**Why it helps:** Classification CI and VLM checks live in the same project instead of a pile of notebooks.
+**Why it helps:** You don’t have to spot a vision problem only by eye in a review.
 
 ---
 
 ## A few numbers
 
-Only things I can point to in this repository:
+Things you can verify in this repo:
 
 | | |
 | --- | --- |
-| Automated tests | **100** pytest cases in **23** modules |
-| Main CLI commands | `run`, `budget-analyze`, `multimodal`, `maps`, `traps` |
-| Traps subcommands | `list`, `harvest`, `run`, `update-baseline`, `gate` |
-| Failure types harvested | 3 (`pope`, `judge`, `caption`) |
-| Map metrics | 3 (`pope_miss`, `judge_flag`, `caption_mismatch`) |
-| Trap retire rule | default **2** consecutive passes |
-| Robustness corruptions | 4 (gaussian noise, motion blur, contrast, occlusion) |
-| Demo fixtures | 3-sample classification demo; 2 multimodal scenes; 12-sample example catalog |
-| Python | 3.10+ |
+| Automated tests | **100** |
+| Main commands | 5 (`run`, `budget-analyze`, `multimodal`, `maps`, `traps`) |
+| Ways a failure can be recorded | 3 |
+| Times a model must pass before an old mistake is retired | 2 |
+| Image stress checks (noise, blur, contrast, cover-up) | 4 |
+| Demo images in the live app | 2 |
+| Samples in the small classification demo | 3 |
+| Python | 3.10 or newer |
 | License | Apache-2.0 |
-| Version | 0.1.0 |
-| CI | one GitHub Actions job: Ubuntu, Python 3.10, pytest |
-| Live demo | CPU-only fake models, no API key |
-
-I am not claiming a fixed cost saving or speedup. Budget reduction is calculated per run from your suite.
+| Version | 0.1.0 (still evolving) |
+| Live demo | works without a GPU or API key |
 
 ---
 
 ## Why this matters
 
-The useful part isn’t another score on a dashboard. It’s knowing that a mistake you fixed last week didn’t quietly come back this week — and having a boring, repeatable check for that before you release.
+The useful part isn’t another score on a screen.
 
-It also makes investigation less vague (“where does it fail?”) and lets you spend evaluation effort on the examples that already burned you, instead of always running the whole pile.
+It’s knowing that a mistake you fixed last week didn’t quietly come back this week — and having a boring, repeatable way to check that before you release.
 
 ---
 
@@ -137,21 +122,10 @@ Remember the important ones
   ↓
 Test them again
   ↓
-Block regressions (exit 1)
+Fail the check if they return
 ```
 
-For engineers, the pieces look like this:
-
-```text
-visioneval run            → select samples → adapter → SQLite → baseline lock → exit 0/1
-visioneval multimodal     → metrics + corruptions + profiling → Markdown/JSON
-visioneval traps harvest  → failures → vlm_traps (separate tables from classification)
-visioneval traps gate     → compare DB to lockfile → exit 1 on new_open / reappeared / worse
-visioneval maps           → CPU-only map from report and/or open traps (read-only)
-visioneval budget-analyze → risk rank, no inference → optional input to run --use-budget
-```
-
-Living traps and maps do not write into the classification tables. Layers sit beside each other.
+Details for engineers are below (install, commands, architecture).
 
 ---
 
