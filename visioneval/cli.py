@@ -6,7 +6,7 @@ import typer
 
 app = typer.Typer(
     name="visioneval",
-    help="Evaluate vision models: Phase 1 classification CI, budget analysis, plus multimodal eval.",
+    help="Evaluate vision models: Phase 1 classification CI, budget analysis, maps, plus multimodal eval.",
     no_args_is_help=True,
 )
 
@@ -29,7 +29,17 @@ def main() -> None:
 @app.command()
 def run(
     suite: Path | None = typer.Argument(None),
-    update_baseline: bool = typer.Option(False),
+    update_baseline: bool = typer.Option(False, "--update-baseline"),
+    use_budget: bool = typer.Option(
+        False,
+        "--use-budget",
+        help="Select samples via the adaptive budget analyzer (previous failures + risk/coverage floor).",
+    ),
+    traps_db: Path | None = typer.Option(
+        None,
+        "--traps-db",
+        help="Living-traps SQLite for budget previous-failure signals. Default: artifacts/traps.sqlite3 if present.",
+    ),
 ) -> None:
     """Run a Phase 1 classification suite and return a non-zero exit code for regressions."""
     if suite is None:
@@ -37,8 +47,11 @@ def run(
         return
     from visioneval.core.runner import run_suite
 
-    result = run_suite(suite, update_baseline=update_baseline)
+    effective = True if use_budget else None
+    result = run_suite(suite, update_baseline=update_baseline, use_budget=effective, traps_db=traps_db)
     typer.echo(f"Accuracy: {result.summary.accuracy:.4f}")
+    if result.used_budget:
+        typer.echo(f"Budget selection: {len(result.recommended_sample_ids)} samples")
     if result.regression and result.regression.is_regression:
         raise typer.Exit(code=1)
 
@@ -145,9 +158,11 @@ def traps_run(
     seed: int = typer.Option(0, "--seed"),
     retire_after: int = typer.Option(2, "--retire-after"),
     check_baseline: Path | None = typer.Option(None, "--check-baseline"),
+    json_output: bool = typer.Option(False, "--json", help="Emit machine-actionable JSON on baseline check."),
 ) -> None:
     """Replay open traps against a Fake or configured VLM. Open traps consume budget first."""
     from visioneval.models.factory import build_model
+    from visioneval.traps.baseline import format_trap_regression, trap_regression_json
     from visioneval.traps.runner import default_fake_for_traps, run_open_traps
     from visioneval.traps.store import TrapStore
 
@@ -187,11 +202,13 @@ def traps_run(
         f"Traps run: evaluated {result.evaluated}, passed {result.passed}, "
         f"failed {result.failed}, retired this run {result.retired}, still open {result.still_open}."
     )
-    if result.regression is not None and result.regression.is_regression:
-        reappeared = ",".join(result.regression.reappeared) or "-"
-        worse = ",".join(result.regression.worse) or "-"
-        typer.echo(f"Trap regression: reappeared {reappeared} worse {worse}")
-        raise typer.Exit(code=1)
+    if result.regression is not None:
+        if json_output:
+            typer.echo(trap_regression_json(result.regression), nl=False)
+        else:
+            typer.echo(format_trap_regression(result.regression), nl=False)
+        if result.regression.is_regression:
+            raise typer.Exit(code=1)
 
 
 @traps_app.command("update-baseline")
@@ -208,6 +225,8 @@ def traps_update_baseline(
     n_retired = len(payload.get("retired_ids") or [])
     typer.echo(f"Wrote trap baseline {lockfile} ({n_open} open, {n_retired} retired).")
 
+
+import visioneval.cli_extra  # noqa: E402,F401  # registers maps + traps gate
 
 if __name__ == "__main__":
     app()
