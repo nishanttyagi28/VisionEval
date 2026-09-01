@@ -61,7 +61,8 @@ def run_suite(
     effective_use_budget = suite.attention.use_budget if use_budget is None else use_budget
     recommended: tuple[str, ...] = ()
     if effective_use_budget:
-        from visioneval.core.budget import analyze_suite, default_traps_db, select_budget_samples
+        from visioneval.core.budget import analyze_suite, default_traps_db
+        from visioneval.core.budget_select import select_budget_samples
 
         traps_path = traps_db if traps_db is not None else default_traps_db()
         analysis = analyze_suite(suite_path, traps_db=traps_path)
