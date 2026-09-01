@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import yaml
@@ -18,6 +19,10 @@ from visioneval.core.budget import (
 from visioneval.core.budget_select import select_budget_samples
 from visioneval.core.runner import run_suite
 from visioneval.core.types import ClassificationPrediction, ClassificationSample, SelectionReason
+
+def _cli_text(result) -> str:
+    raw = getattr(result, "stdout", None) or result.output or ""
+    return re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", raw)
 
 
 def _sample(sample_id: str, *, confidence: float = 0.9, tags: frozenset[str] = frozenset()) -> ClassificationSample:
@@ -135,4 +140,6 @@ def test_run_cli_use_budget_flag(tmp_path: Path) -> None:
 
     result = CliRunner().invoke(app, ["run", "--help"])
     assert result.exit_code == 0
-    assert "--use-budget" in result.output
+    help_text = _cli_text(result)
+    assert "--use-budget" in help_text
+    assert "--traps-db" in help_text
