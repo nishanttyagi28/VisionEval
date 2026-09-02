@@ -79,6 +79,16 @@ visioneval run demo_suite.yaml
 
 **Why it helps:** You don’t have to spot a vision problem only by eye in a review.
 
+### Checks model captions against what should be in the image
+
+VisionEval can treat a model’s answer as a claim and check it against simple ground truth (expected objects, captions, present/absent facts), then say supported, contradicted, or not enough evidence.
+
+```bash
+visioneval verify examples/verify/cases.yaml --json
+```
+
+**Why it helps:** You get an explainable pass/fail on “did the model invent something?” without calling a paid API.
+
 ---
 
 ## A few numbers
@@ -87,8 +97,8 @@ Things you can verify in this repo:
 
 | | |
 | --- | --- |
-| Automated tests | **100** |
-| Main commands | 5 (`run`, `budget-analyze`, `multimodal`, `maps`, `traps`) |
+| Automated tests | **109** |
+| Main commands | 6 (`run`, `budget-analyze`, `multimodal`, `maps`, `traps`, `verify`) |
 | Ways a failure can be recorded | 3 |
 | Times a model must pass before an old mistake is retired | 2 |
 | Image stress checks (noise, blur, contrast, cover-up) | 4 |
@@ -156,8 +166,11 @@ visioneval run SUITE [--update-baseline] [--use-budget] [--traps-db PATH]
 visioneval budget-analyze SUITE [--json] [--top N] [--traps-db PATH]
 visioneval multimodal CONFIG [--json-out PATH] [--markdown-out PATH]
 visioneval maps [REPORT] [--json] [--db PATH]
+visioneval verify REPORT_OR_SUITE [--json] [--include-corrupted]
 visioneval traps list|harvest|run|gate|update-baseline
 ```
+
+`visioneval truth` is an alias for `verify` (TruthGraph-style claim check; CPU-only).
 
 ## Quick start
 
@@ -179,9 +192,10 @@ visioneval traps update-baseline --db artifacts/traps.sqlite3 \
 visioneval traps gate --db artifacts/traps.sqlite3 \
   --lockfile artifacts/baselines/traps.json --json
 visioneval maps reports/mm.json --json
+visioneval verify reports/mm.json --json
 ```
 
-More detail: [QUICKSTART.md](QUICKSTART.md), [docs/BUDGET.md](docs/BUDGET.md), [docs/MULTIMODAL.md](docs/MULTIMODAL.md), [docs/MAPS.md](docs/MAPS.md), [DEMO_GUIDE.md](DEMO_GUIDE.md).
+More detail: [QUICKSTART.md](QUICKSTART.md), [docs/BUDGET.md](docs/BUDGET.md), [docs/MULTIMODAL.md](docs/MULTIMODAL.md), [docs/MAPS.md](docs/MAPS.md), [docs/TRUTHGRAPH.md](docs/TRUTHGRAPH.md), [DEMO_GUIDE.md](DEMO_GUIDE.md).
 
 ### Multimodal dashboard
 
