@@ -89,6 +89,15 @@ visioneval verify examples/verify/cases.yaml --json
 
 **Why it helps:** You get an explainable pass/fail on “did the model invent something?” without calling a paid API.
 
+<p align="center">
+  <img src="docs/assets/verify-supported.svg" alt="VisionEval verify: supported_square verdict" width="410">
+  &nbsp;
+  <img src="docs/assets/verify-contradicted.svg" alt="VisionEval verify: contradicted_cat verdict" width="410">
+</p>
+<p align="center">
+  <img src="docs/assets/verify-cli.svg" alt="visioneval verify CLI showing supported, contradicted, insufficient" width="640">
+</p>
+
 ---
 
 ## A few numbers
@@ -251,6 +260,10 @@ You can compare two fake models on simple shapes, look at scores, and export Mar
   <img src="docs/assets/streamlit-red-square.svg" alt="Side-by-side VLM comparison on red_square" width="410">
   &nbsp;
   <img src="docs/assets/streamlit-blue-circle.svg" alt="Metric radar and Markdown/JSON export on blue_circle" width="410">
+</p>
+
+<p align="center">
+  <img src="docs/assets/verify-cli.svg" alt="TruthGraph-style verify CLI: supported / contradicted / insufficient" width="640">
 </p>
 
 ---
