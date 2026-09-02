@@ -130,7 +130,30 @@ def _events_from_row(row: Mapping[str, Any], *, factual_threshold: float) -> lis
                     source="report",
                 )
             )
+    events.extend(_verify_events(row, sample_id=sample_id, model=model))
     return events
+
+
+def _verify_events(row: Mapping[str, Any], *, sample_id: str, model: str) -> list[FailureEvent]:
+    """Surface TruthGraph contradicted claims without writing traps."""
+    try:
+        from visioneval.verify.adapter import contradicted_object_hint, verify_row
+    except Exception:
+        return []
+    result = verify_row(row)
+    if result is None or result.verdict != "contradicted":
+        return []
+    return [
+        FailureEvent(
+            sample_id=sample_id,
+            model=model,
+            probe_type="verify",
+            metric="claim_contradicted",
+            object_name=contradicted_object_hint(row, result),
+            detail=f"confidence={result.confidence};claim={result.claim}",
+            source="report",
+        )
+    ]
 
 
 def _first_missing_object(flags: Iterable[str]) -> str | None:
