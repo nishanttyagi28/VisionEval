@@ -226,7 +226,7 @@ def traps_update_baseline(
     typer.echo(f"Wrote trap baseline {lockfile} ({n_open} open, {n_retired} retired).")
 
 
-import visioneval.cli_extra  # noqa: E402,F401  # registers maps + traps gate
+import visioneval.cli_extra  # noqa: E402,F401  # registers maps + traps gate + verify/truth
 
 if __name__ == "__main__":
     app()

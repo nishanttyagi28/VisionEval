@@ -13,7 +13,7 @@ visioneval maps --db artifacts/traps.sqlite3
 
 | Source | What counts as a failure |
 | --- | --- |
-| Multimodal JSON report | Clean rows only. POPE probe `correct: false` → `pope_miss`; judge flags or low factual score → `judge_flag`; caption missing expected objects or leaking absent ones → `caption_mismatch` |
+| Multimodal JSON report | Clean rows only. POPE probe `correct: false` → `pope_miss`; judge flags or low factual score → `judge_flag`; caption missing expected objects or leaking absent ones → `caption_mismatch`; TruthGraph contradicted claim → `claim_contradicted` (`probe_type=verify`) |
 | Living-traps SQLite (`--db`) | Every **open** (non-retired) trap, mapped to the same metric names |
 
 Corrupted / noise-sweep rows are skipped so a robustness pass does not flood the map.
@@ -22,8 +22,8 @@ Corrupted / noise-sweep rows are skipped so a robustness pass does not flood the
 
 Counts (sorted keys) plus a deterministic event list:
 
-- `by_metric` — `pope_miss` / `judge_flag` / `caption_mismatch`
-- `by_probe_type` — `pope` / `judge` / `caption`
+- `by_metric` — `pope_miss` / `judge_flag` / `caption_mismatch` / `claim_contradicted`
+- `by_probe_type` — `pope` / `judge` / `caption` / `verify`
 - `by_object` — object name when known
 - `by_sample_id`
 - `by_model`

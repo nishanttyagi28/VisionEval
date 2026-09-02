@@ -1,0 +1,36 @@
+{
+  "name": "verify-demo-report",
+  "models": [{"name": "fake-demo", "kind": "fake"}],
+  "samples": [
+    {
+      "sample_id": "red_square",
+      "model": "fake-demo",
+      "corruption": null,
+      "severity": 0.0,
+      "response": "A red square on a white background.",
+      "caption": "A red square on a white background.",
+      "objects": ["square", "red square"],
+      "absent_objects": ["cat", "car"]
+    },
+    {
+      "sample_id": "hallucinated_cat",
+      "model": "fake-demo",
+      "corruption": null,
+      "severity": 0.0,
+      "response": "There is a cat sitting next to a car on the floor.",
+      "caption": "A red square on a white background.",
+      "objects": ["square", "red square"],
+      "absent_objects": ["cat", "car"]
+    },
+    {
+      "sample_id": "noisy_skip",
+      "model": "fake-demo",
+      "corruption": "gaussian_noise",
+      "severity": 0.5,
+      "response": "There is a cat.",
+      "caption": "A red square on a white background.",
+      "objects": ["square"],
+      "absent_objects": ["cat"]
+    }
+  ]
+}
