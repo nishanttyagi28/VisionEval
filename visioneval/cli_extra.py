@@ -1,4 +1,4 @@
-"""Extra CLI commands: maps and traps gate (imported once from cli.py)."""
+"""Extra CLI commands: maps, traps gate, and TruthGraph verify (imported once from cli.py)."""
 
 from __future__ import annotations
 
@@ -57,3 +57,29 @@ def traps_gate(
     )
     if regression.is_regression:
         raise typer.Exit(code=1)
+
+
+@app.command("verify")
+def verify(
+    report_or_suite: Path = typer.Argument(
+        ...,
+        help="Multimodal JSON report or YAML/JSON verify case suite.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON dossier instead of human text."),
+    include_corrupted: bool = typer.Option(
+        False,
+        "--include-corrupted",
+        help="Also verify corrupted/noise-sweep rows (default: clean rows only).",
+    ),
+) -> None:
+    """TruthGraph-style claim verification against visual ground-truth evidence. CPU-only."""
+    from visioneval.verify.adapter import build_dossier, format_human, to_json
+
+    if not report_or_suite.is_file():
+        raise typer.BadParameter(f"input not found: {report_or_suite}")
+    dossier = build_dossier(report_or_suite, skip_corrupted=not include_corrupted)
+    typer.echo(to_json(dossier) if json_output else format_human(dossier), nl=False)
+
+
+# Alias matching the TruthGraph product name.
+app.command("truth")(verify)
