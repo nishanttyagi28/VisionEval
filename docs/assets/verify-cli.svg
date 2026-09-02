@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540" role="img" aria-label="VisionEval verify CLI">
+  <rect width="960" height="540" fill="#0f1117"/>
+  <rect x="20" y="20" width="920" height="500" rx="16" fill="#181c26" stroke="#374151" stroke-width="2"/>
+  <circle cx="48" cy="48" r="7" fill="#f87171"/>
+  <circle cx="74" cy="48" r="7" fill="#fbbf24"/>
+  <circle cx="100" cy="48" r="7" fill="#22c55e"/>
+  <text x="140" y="54" font-family="ui-monospace,Menlo,monospace" font-size="16" fill="#94a3b8">visioneval verify examples/verify/cases.yaml</text>
+  <text x="48" y="100" font-family="ui-monospace,Menlo,monospace" font-size="20" fill="#f1f5f9">VisionEval TruthGraph verify</text>
+  <text x="48" y="150" font-family="ui-monospace,Menlo,monospace" font-size="20" fill="#94a3b8">Total claims:   3</text>
+  <text x="48" y="186" font-family="ui-monospace,Menlo,monospace" font-size="20" fill="#22c55e">Supported:      1</text>
+  <text x="48" y="222" font-family="ui-monospace,Menlo,monospace" font-size="20" fill="#f87171">Contradicted:   1</text>
+  <text x="48" y="258" font-family="ui-monospace,Menlo,monospace" font-size="20" fill="#fbbf24">Insufficient:   1</text>
+  <text x="48" y="320" font-family="ui-monospace,Menlo,monospace" font-size="20" fill="#22c55e">  supported_square        supported</text>
+  <text x="48" y="356" font-family="ui-monospace,Menlo,monospace" font-size="20" fill="#f87171">  contradicted_cat        contradicted</text>
+  <text x="48" y="392" font-family="ui-monospace,Menlo,monospace" font-size="20" fill="#fbbf24">  insufficient_unrelated  insufficient</text>
+</svg>

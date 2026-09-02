@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540" role="img" aria-label="VisionEval verify supported_square">
+  <rect width="960" height="540" fill="#ffffff"/>
+  <rect width="960" height="8" fill="#16a34a"/>
+  <rect x="24" y="24" width="912" height="492" rx="20" fill="#f9fafb" stroke="#e5e7eb" stroke-width="2"/>
+  <text x="56" y="72" font-family="Helvetica,Arial,sans-serif" font-size="18" fill="#6b7280">VisionEval · TruthGraph verify</text>
+  <text x="56" y="120" font-family="Helvetica,Arial,sans-serif" font-size="34" font-weight="700" fill="#111827">supported_square</text>
+  <rect x="56" y="150" width="128" height="36" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="70" y="174" font-family="Helvetica,Arial,sans-serif" font-size="18" font-weight="700" fill="#16a34a">SUPPORTED</text>
+  <text x="56" y="220" font-family="ui-monospace,Menlo,monospace" font-size="18" fill="#1f2937">claim: A red square appears on a white background.</text>
+  <text x="56" y="256" font-family="ui-monospace,Menlo,monospace" font-size="18" fill="#16a34a">keywords: background, red, square, white</text>
+  <text x="56" y="292" font-family="ui-monospace,Menlo,monospace" font-size="18" fill="#4b5563">confidence: 0.6   model=demo</text>
+  <text x="56" y="328" font-family="ui-monospace,Menlo,monospace" font-size="18" fill="#1f2937">Evidence matched caption + expected objects.</text>
+  <text x="56" y="490" font-family="Helvetica,Arial,sans-serif" font-size="16" fill="#9ca3af">CPU-only · no paid API · examples/verify/</text>
+</svg>
