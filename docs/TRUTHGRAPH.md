@@ -37,6 +37,8 @@ See `visioneval/verify/SOURCE.md` for the upstream mapping and small adaptations
 
 Verdicts: `supported` | `contradicted` | `insufficient`, plus confidence and matched keywords.
 
+README gallery stills: `docs/assets/verify-supported.svg`, `verify-contradicted.svg`, `verify-cli.svg` (from the silent verify demo).
+
 ## Relation to maps / traps
 
 - `visioneval maps` may surface `probe_type=verify` / `metric=claim_contradicted`
