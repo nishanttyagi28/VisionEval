@@ -91,3 +91,7 @@ CI runs the test suite on Python 3.10 for every push and pull request.
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
+
+## How this was built
+
+Parts of this code were written with AI coding assistants (Cursor and Claude). I set the design and the tests the code has to pass, and agent-written commits carry a `Co-authored-by` trailer.
